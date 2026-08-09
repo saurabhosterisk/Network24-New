@@ -50,18 +50,18 @@ class ChatHubActivity : BaseActivity() {
         messagesAdapter = ChatMessagesAdapter(senderId) { message -> beginReply(message) }
         binding.rvMessages.layoutManager = LinearLayoutManager(this).apply { stackFromEnd = true }
         binding.rvMessages.adapter = messagesAdapter
-        binding.btnSend.setOnClickListener { sendCurrent() }
-        binding.btnCancelReply.setOnClickListener { clearReply() }
+        binding.btnSend!!.setOnClickListener { sendCurrent() }
+        binding.btnCancelReply!!.setOnClickListener { clearReply() }
 
         startRoomUnreadWatchers(rooms)
         val lastId = prefs.getLastChatRoomId()
         val initial = rooms.firstOrNull { it.id == lastId } ?: rooms.first()
         selectRoom(initial)
 
-        binding.rvMessages.nextFocusDownId = binding.etMessage.id
-        binding.etMessage.nextFocusUpId = binding.rvMessages.id
-        binding.btnSend.nextFocusUpId = binding.rvMessages.id
-        binding.btnCancelReply.nextFocusUpId = binding.rvMessages.id
+        binding.rvMessages.nextFocusDownId = binding.etMessage!!.id
+        binding.etMessage!!.nextFocusUpId = binding.rvMessages.id
+        binding.btnSend!!.nextFocusUpId = binding.rvMessages.id
+        binding.btnCancelReply!!.nextFocusUpId = binding.rvMessages.id
         focusRoom(initial)
     }
 
@@ -78,15 +78,16 @@ class ChatHubActivity : BaseActivity() {
     private fun selectRoom(room: ChatRoom) {
         selectedRoom = room
         clearReply()
-        binding.tvRoomTitle.text = "# ${room.id}"
+        binding.tvRoomTitle!!.text = "# ${room.id}"
         roomsAdapter.setSelectedRoom(room.id)
         prefs.setLastChatRoomId(room.id)
         val canSend = canSendToRoom(room.id, room.readOnly)
-        binding.etMessage.isEnabled = canSend
-        binding.btnSend.isEnabled = canSend
-        binding.etMessage.hint = if (canSend) "Type a message (use @username to mention)" else "Read-only channel"
-        binding.etMessage.visibility = if (canSend) View.VISIBLE else View.GONE
-        binding.btnSend.visibility = if (canSend) View.VISIBLE else View.GONE
+        binding.etMessage!!.isEnabled = canSend
+        binding.btnSend!!.isEnabled = canSend
+        binding.etMessage!!.hint = if (canSend) "Type a message (use @username to mention)" else "Read-only channel"
+        binding.etMessage!!.visibility = if (canSend) View.VISIBLE else View.GONE
+        binding.btnSend!!.visibility = if (canSend) View.VISIBLE else View.GONE
+        binding.replyBar!!.visibility = if (canSend) binding.replyBar!!.visibility else View.GONE
         roomsAdapter.setUnread(room.id, false)
 
         roomMessagesListener?.remove()
@@ -109,23 +110,23 @@ class ChatHubActivity : BaseActivity() {
         if (!canSendToRoom(room.id, room.readOnly)) return
         replyToMessage = message
         val name = message.senderName.ifBlank { "Unknown" }
-        binding.tvReplyPreview.text = "↩ Replying to $name\n${message.text.take(160)}"
-        binding.replyBar.visibility = View.VISIBLE
-        binding.etMessage.requestFocus()
+        binding.tvReplyPreview!!.text = "↩ Replying to $name\n${message.text.take(160)}"
+        binding.replyBar!!.visibility = View.VISIBLE
+        binding.etMessage!!.requestFocus()
     }
 
     private fun clearReply() {
         replyToMessage = null
         if (::binding.isInitialized) {
-            binding.replyBar.visibility = View.GONE
-            binding.tvReplyPreview.text = ""
+            binding.replyBar!!.visibility = View.GONE
+            binding.tvReplyPreview!!.text = ""
         }
     }
 
     private fun sendCurrent() {
         val room = selectedRoom ?: return
         if (!canSendToRoom(room.id, room.readOnly)) return
-        val text = binding.etMessage.text?.toString()?.trim().orEmpty()
+        val text = binding.etMessage!!.text?.toString()?.trim().orEmpty()
         if (text.isEmpty()) {
             Toast.makeText(this, "Empty message", Toast.LENGTH_SHORT).show()
             return
@@ -138,7 +139,7 @@ class ChatHubActivity : BaseActivity() {
             senderName = senderName,
             replyTo = replyToMessage,
             mentions = mentions,
-            onOk = { binding.etMessage.setText(""); clearReply() },
+            onOk = { binding.etMessage!!.setText(""); clearReply() },
             onError = { Toast.makeText(this, "Send failed: ${it.message}", Toast.LENGTH_LONG).show() }
         )
     }
@@ -182,16 +183,16 @@ class ChatHubActivity : BaseActivity() {
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.action == KeyEvent.ACTION_DOWN) {
-            val readOnly = binding.etMessage.visibility == View.GONE
-            val right = binding.rvMessages.hasFocus() || binding.etMessage.hasFocus() || binding.btnSend.hasFocus() || binding.btnCancelReply.hasFocus()
+            val readOnly = binding.etMessage!!.visibility == View.GONE
+            val right = binding.rvMessages.hasFocus() || binding.etMessage!!.hasFocus() || binding.btnSend!!.hasFocus() || binding.btnCancelReply!!.hasFocus()
             when (event.keyCode) {
                 KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                    if (binding.rvRooms.hasFocus()) { if (messagesAdapter.itemCount > 0) focusLastVisibleMessage() else if (!readOnly) binding.etMessage.requestFocus(); return true }
-                    if (binding.etMessage.hasFocus() || binding.btnCancelReply.hasFocus()) { binding.btnSend.requestFocus(); return true }
-                    if (binding.btnSend.hasFocus()) return true
+                    if (binding.rvRooms.hasFocus()) { if (messagesAdapter.itemCount > 0) focusLastVisibleMessage() else if (!readOnly) binding.etMessage!!.requestFocus(); return true }
+                    if (binding.etMessage!!.hasFocus() || binding.btnCancelReply!!.hasFocus()) { binding.btnSend!!.requestFocus(); return true }
+                    if (binding.btnSend!!.hasFocus()) return true
                 }
                 KeyEvent.KEYCODE_DPAD_LEFT -> {
-                    if (binding.btnSend.hasFocus() || binding.btnCancelReply.hasFocus()) { binding.etMessage.requestFocus(); return true }
+                    if (binding.btnSend!!.hasFocus() || binding.btnCancelReply!!.hasFocus()) { binding.etMessage!!.requestFocus(); return true }
                     if (right) { restoreRoomFocus(); return true }
                 }
                 KeyEvent.KEYCODE_DPAD_DOWN -> {
@@ -201,12 +202,12 @@ class ChatHubActivity : BaseActivity() {
                             val pos = binding.rvMessages.getChildAdapterPosition(child)
                             val tv = child.findViewById<android.widget.TextView>(R.id.tvText)
                             if (tv != null && tv.hasFocus() && tv.canScrollVertically(1)) return super.dispatchKeyEvent(event)
-                            if (pos == messagesAdapter.itemCount - 1) { if (!readOnly) binding.etMessage.requestFocus(); return true }
+                            if (pos == messagesAdapter.itemCount - 1) { if (!readOnly) binding.etMessage!!.requestFocus(); return true }
                         }
-                    } else if (right && (binding.etMessage.hasFocus() || binding.btnSend.hasFocus() || binding.btnCancelReply.hasFocus())) return true
+                    } else if (right && (binding.etMessage!!.hasFocus() || binding.btnSend!!.hasFocus() || binding.btnCancelReply!!.hasFocus())) return true
                 }
                 KeyEvent.KEYCODE_DPAD_UP -> {
-                    if (right && (binding.etMessage.hasFocus() || binding.btnSend.hasFocus() || binding.btnCancelReply.hasFocus())) { focusLastVisibleMessage(); return true }
+                    if (right && (binding.etMessage!!.hasFocus() || binding.btnSend!!.hasFocus() || binding.btnCancelReply!!.hasFocus())) { focusLastVisibleMessage(); return true }
                     if (right && binding.rvMessages.hasFocus()) {
                         val child = binding.rvMessages.focusedChild
                         if (child != null) {
@@ -229,7 +230,9 @@ class ChatHubActivity : BaseActivity() {
         if (pos >= 0) lm.findViewByPosition(pos)?.findViewById<View>(R.id.tvText)?.requestFocus()
     }
 
-    private fun restoreRoomFocus() = focusRoom(selectedRoom ?: return)
+    private fun restoreRoomFocus() {
+        selectedRoom?.let { focusRoom(it) }
+    }
 
     override fun onDestroy() {
         roomMessagesListener?.remove()
