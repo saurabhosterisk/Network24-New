@@ -1,6 +1,8 @@
 package com.network24.player.features.player.multiview
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import androidx.annotation.OptIn
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
@@ -26,6 +28,8 @@ class MultiPlayerManager(
     private val urls = arrayOfNulls<String>(4)
     private val retryCounts = IntArray(4)
     private val maxAutoRetries = 3
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val retryRunnable = arrayOfNulls<Runnable>(4)
 
     fun attach(slot: Int, playerView: PlayerView) {
         require(slot in 0..3)
@@ -71,10 +75,15 @@ class MultiPlayerManager(
 
                         val httpError = findHttpError(error)
                         if (httpError != null) {
-                            listener?.onError(
-                                slot,
-                                "HTTP ${httpError.first} from ${httpError.second}"
-                            )
+                            if (httpError.first == 403 && retryCounts[slot] < maxAutoRetries) {
+                                retryCounts[slot]++
+                                scheduleRetry(slot, url, retryCounts[slot])
+                            } else {
+                                listener?.onError(
+                                    slot,
+                                    "HTTP ${httpError.first} from ${httpError.second}"
+                                )
+                            }
                             return
                         }
 
@@ -91,6 +100,22 @@ class MultiPlayerManager(
                     }
                 })
             }
+    }
+
+    private fun scheduleRetry(slot: Int, url: String, attempt: Int) {
+        retryRunnable[slot]?.let(mainHandler::removeCallbacks)
+
+        // Give the server/session a short breathing window before reconnecting.
+        val delayMs = 1500L * attempt
+        listener?.onLoading(slot)
+
+        val runnable = Runnable {
+            if (urls[slot] == url && players[slot] != null) {
+                playerRetry(slot, url)
+            }
+        }
+        retryRunnable[slot] = runnable
+        mainHandler.postDelayed(runnable, delayMs)
     }
 
     private fun playerRetry(slot: Int, url: String) {
@@ -117,6 +142,9 @@ class MultiPlayerManager(
 
     fun play(slot: Int, url: String) {
         require(slot in 0..3)
+        retryRunnable[slot]?.let(mainHandler::removeCallbacks)
+        retryRunnable[slot] = null
+
         val player = players[slot] ?: createPlayer(slot).also { players[slot] = it }
 
         if (urls[slot] == url && player.playbackState != Player.STATE_IDLE) {
@@ -145,6 +173,8 @@ class MultiPlayerManager(
 
     fun clear(slot: Int) {
         require(slot in 0..3)
+        retryRunnable[slot]?.let(mainHandler::removeCallbacks)
+        retryRunnable[slot] = null
         players[slot]?.stop()
         players[slot]?.clearMediaItems()
         urls[slot] = null
@@ -155,6 +185,8 @@ class MultiPlayerManager(
 
     fun release() {
         for (i in 0..3) {
+            retryRunnable[i]?.let(mainHandler::removeCallbacks)
+            retryRunnable[i] = null
             players[i]?.release()
             players[i] = null
             urls[i] = null
