@@ -360,7 +360,27 @@ class ChannelListActivity : BaseActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (isGoingToFullscreen) isGoingToFullscreen = false
+
+        // Re-attach the shared ExoPlayer after returning from the full-screen player.
+        // Do not create a new stream unless the shared player is actually idle/ended.
+        if (isGoingToFullscreen) {
+            isGoingToFullscreen = false
+        }
+
+        if (previewPosition >= 0 && channelList.isNotEmpty()) {
+            PlayerManager.attach(this, binding.playerView)
+            val player = PlayerManager.getExoPlayerOrNull()
+            if (player != null) {
+                when (player.playbackState) {
+                    Player.STATE_READY, Player.STATE_BUFFERING -> player.play()
+                    Player.STATE_IDLE, Player.STATE_ENDED -> {
+                        channelList.getOrNull(previewPosition)?.let { currentChannel ->
+                            PlayerManager.play(this, binding.playerView, buildStreamUrl(currentChannel))
+                        }
+                    }
+                }
+            }
+        }
     }
 
     override fun onDestroy() {
