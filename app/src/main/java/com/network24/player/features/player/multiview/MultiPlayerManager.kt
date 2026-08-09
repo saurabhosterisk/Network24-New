@@ -7,15 +7,10 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.datasource.DataSource
-import androidx.media3.datasource.DefaultHttpDataSource
-import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
-import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
-import com.network24.player.core.net.CountingDataSource
+import com.network24.player.core.net.StreamDataSourceFactory
 
 @OptIn(UnstableApi::class)
 class MultiPlayerManager(
@@ -44,23 +39,12 @@ class MultiPlayerManager(
             .setBufferDurationsMs(15000, 50000, 1000, 2000)
             .build()
 
-        val httpFactory = DefaultHttpDataSource.Factory()
-            .setUserAgent("N24PlayerPlayer")
-            .setAllowCrossProtocolRedirects(true)
-
-        val countingFactory = DataSource.Factory {
-            CountingDataSource(httpFactory.createDataSource())
-        }
-
-        val mediaSourceFactory = DefaultMediaSourceFactory(countingFactory)
-        val renderersFactory = DefaultRenderersFactory(context.applicationContext).apply {
-            setEnableDecoderFallback(true)
-            setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
-        }
-
-        return ExoPlayer.Builder(context.applicationContext, renderersFactory)
+        return ExoPlayer.Builder(
+            context.applicationContext,
+            StreamDataSourceFactory.createRenderersFactory(context)
+        )
             .setLoadControl(loadControl)
-            .setMediaSourceFactory(mediaSourceFactory)
+            .setMediaSourceFactory(StreamDataSourceFactory.createMediaSourceFactory())
             .build()
             .apply {
                 playWhenReady = true
@@ -81,12 +65,6 @@ class MultiPlayerManager(
 
                     override fun onPlayerError(error: PlaybackException) {
                         val httpError = findHttpError(error)
-                        val cause = error.cause?.message ?: error.message ?: "Playback error"
-                        val decoderError = cause.contains("decoder", true) ||
-                            cause.contains("codec", true) ||
-                            cause.contains("MediaCodec", true) ||
-                            cause.contains("surface", true)
-
                         if (httpError != null) {
                             listener?.onError(
                                 slot,
@@ -94,6 +72,12 @@ class MultiPlayerManager(
                             )
                             return
                         }
+
+                        val cause = error.cause?.message ?: error.message ?: "Playback error"
+                        val decoderError = cause.contains("decoder", true) ||
+                            cause.contains("codec", true) ||
+                            cause.contains("MediaCodec", true) ||
+                            cause.contains("surface", true)
 
                         if (decoderError && !reducedProfile[slot]) {
                             reducedProfile[slot] = true
@@ -117,16 +101,10 @@ class MultiPlayerManager(
             }
     }
 
-    /**
-     * Finds an HTTP response error from the Media3 exception chain.
-     * Uses the public HttpDataSource exception type rather than the concrete
-     * DefaultHttpDataSource implementation, so this remains compatible with
-     * the Media3 version used by the project.
-     */
     private fun findHttpError(error: PlaybackException): Pair<Int, String>? {
         var current: Throwable? = error
         while (current != null) {
-            if (current is HttpDataSource.InvalidResponseCodeException) {
+            if (current is androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException) {
                 val uri = current.dataSpec.uri
                 return current.responseCode to "${uri.host}${uri.path}"
             }
@@ -157,15 +135,9 @@ class MultiPlayerManager(
     }
 
     fun setAudioFocus(slot: Int) {
+        require(slot in 0..3)
         for (i in 0..3) {
-            players[i]?.apply {
-                val focused = i == slot
-                volume = if (focused) 1f else 0f
-                trackSelectionParameters = trackSelectionParameters
-                    .buildUpon()
-                    .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, !focused)
-                    .build()
-            }
+            players[i]?.volume = if (i == slot) 1f else 0f
         }
     }
 
