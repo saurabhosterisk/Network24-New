@@ -14,7 +14,8 @@ import android.text.method.ScrollingMovementMethod
 
 class ChatMessagesAdapter(
     private val mySenderId: String,
-    private val onReply: (ChatMessage) -> Unit = {}
+    private val onReply: (ChatMessage) -> Unit = {},
+    private val onMessageMenu: (ChatMessage) -> Unit = {}
 ) : RecyclerView.Adapter<ChatMessagesAdapter.VH>() {
 
     private val items = mutableListOf<ChatMessage>()
@@ -37,7 +38,7 @@ class ChatMessagesAdapter(
             R.layout.item_chat_message_left
         }
         val v = LayoutInflater.from(parent.context).inflate(layout, parent, false)
-        return VH(v, onReply)
+        return VH(v, onReply, onMessageMenu)
     }
 
     override fun onBindViewHolder(holder: VH, position: Int) {
@@ -48,7 +49,8 @@ class ChatMessagesAdapter(
 
     class VH(
         itemView: View,
-        private val onReply: (ChatMessage) -> Unit
+        private val onReply: (ChatMessage) -> Unit,
+        private val onMessageMenu: (ChatMessage) -> Unit
     ) : RecyclerView.ViewHolder(itemView) {
 
         private val tvSender: TextView = itemView.findViewById(R.id.tvSender)
@@ -76,6 +78,10 @@ class ChatMessagesAdapter(
 
             tvText.setOnClickListener {
                 onReply(m)
+            }
+            tvText.setOnLongClickListener {
+                onMessageMenu(m)
+                true
             }
         }
 
