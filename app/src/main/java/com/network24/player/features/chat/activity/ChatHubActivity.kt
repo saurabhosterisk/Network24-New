@@ -1,11 +1,18 @@
 package com.network24.player.features.chat.activity
 
+import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.provider.Settings
+import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
+import android.view.ViewGroup
+import android.widget.PopupWindow
 import android.widget.Toast
+import androidx.core.widget.doAfterTextChanged
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
@@ -15,6 +22,7 @@ import com.network24.player.core.preferences.PreferenceManager
 import com.network24.player.databinding.ActivityChatHubBinding
 import com.network24.player.features.chat.adapter.ChatMessagesAdapter
 import com.network24.player.features.chat.adapter.ChatRoomsAdapter
+import com.network24.player.features.chat.adapter.MentionAdapter
 import com.network24.player.features.chat.model.ChatRoom
 import com.network24.player.features.chat.repo.ChatMessage
 import com.network24.player.features.chat.repo.ChatRepository
@@ -31,6 +39,11 @@ class ChatHubActivity : BaseActivity() {
     private val roomLastMsgListeners = mutableMapOf<String, ListenerRegistration>()
     private var selectedRoom: ChatRoom? = null
     private var replyToMessage: ChatMessage? = null
+
+    private var mentionPopup: PopupWindow? = null
+    private var mentionAdapter: MentionAdapter? = null
+    private var mentionTokenStart = -1
+    private var mentionQuery = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -52,6 +65,7 @@ class ChatHubActivity : BaseActivity() {
         binding.rvMessages.adapter = messagesAdapter
         binding.btnSend?.setOnClickListener { sendCurrent() }
         binding.btnCancelReply?.setOnClickListener { clearReply() }
+        setupMentionAutocomplete()
 
         startRoomUnreadWatchers(rooms)
         val lastId = prefs.getLastChatRoomId()
@@ -64,6 +78,113 @@ class ChatHubActivity : BaseActivity() {
         binding.btnCancelReply?.nextFocusUpId = binding.rvMessages.id
         focusRoom(initial)
     }
+
+    private fun setupMentionAutocomplete() {
+        val edit = binding.etMessage ?: return
+        edit.doAfterTextChanged { text ->
+            val value = text?.toString().orEmpty()
+            val cursor = edit.selectionStart.coerceAtLeast(0)
+            val at = value.lastIndexOf('@', (cursor - 1).coerceAtLeast(0))
+            if (at < 0 || at > cursor - 1) {
+                hideMentionPopup()
+                return@doAfterTextChanged
+            }
+
+            val token = value.substring(at + 1, cursor)
+            if (token.contains(Regex("\\s")) || token.length > 32) {
+                hideMentionPopup()
+                return@doAfterTextChanged
+            }
+
+            mentionTokenStart = at
+            mentionQuery = token
+            loadMentionSuggestions(token)
+        }
+    }
+
+    private fun loadMentionSuggestions(query: String) {
+        val normalized = query.lowercase()
+        FirebaseFirestore.getInstance()
+            .collection("users")
+            .orderBy("username", Query.Direction.ASCENDING)
+            .startAt(normalized)
+            .endAt(normalized + "\uf8ff")
+            .limit(8)
+            .get()
+            .addOnSuccessListener { snap ->
+                val names = snap.documents.mapNotNull { doc ->
+                    doc.getString("username")?.trim()?.takeIf { it.isNotEmpty() }
+                }
+                    .filter { it.lowercase().startsWith(normalized) }
+                    .distinctBy { it.lowercase() }
+
+                if (names.isEmpty()) hideMentionPopup() else showMentionPopup(names)
+            }
+            .addOnFailureListener { hideMentionPopup() }
+    }
+
+    private fun showMentionPopup(names: List<String>) {
+        val edit = binding.etMessage ?: return
+        val popupRecycler = mentionPopup?.contentView as? RecyclerView
+        if (popupRecycler == null) {
+            val recycler = RecyclerView(this).apply {
+                layoutManager = LinearLayoutManager(this@ChatHubActivity)
+                overScrollMode = View.OVER_SCROLL_NEVER
+                setPadding(4, 4, 4, 4)
+                background = GradientDrawable().apply {
+                    setColor(Color.parseColor("#151B2C"))
+                    cornerRadius = 12f
+                }
+            }
+            mentionAdapter = MentionAdapter { username -> insertMention(username) }
+            recycler.adapter = mentionAdapter
+
+            mentionPopup = PopupWindow(
+                recycler,
+                dp(300),
+                dp(8 + (48 * names.size.coerceAtMost(4))),
+                true
+            ).apply {
+                elevation = dp(8).toFloat()
+                isOutsideTouchable = true
+                setBackgroundDrawable(GradientDrawable().apply {
+                    setColor(Color.parseColor("#151B2C"))
+                    cornerRadius = 12f
+                })
+            }
+        }
+
+        mentionAdapter?.submit(names)
+        mentionPopup?.height = dp(8 + (48 * names.size.coerceAtMost(4)))
+        if (mentionPopup?.isShowing != true) {
+            mentionPopup?.showAsDropDown(edit, 0, -edit.height - mentionPopup!!.height - dp(6))
+        }
+    }
+
+    private fun insertMention(username: String) {
+        val edit = binding.etMessage ?: return
+        val text = edit.text?.toString().orEmpty()
+        val cursor = edit.selectionStart.coerceAtLeast(0)
+        if (mentionTokenStart < 0 || mentionTokenStart > cursor || mentionTokenStart > text.length) {
+            hideMentionPopup()
+            return
+        }
+        val replacement = "@$username "
+        val updated = text.substring(0, mentionTokenStart) + replacement + text.substring(cursor)
+        edit.setText(updated)
+        val newCursor = mentionTokenStart + replacement.length
+        edit.setSelection(newCursor.coerceAtMost(updated.length))
+        hideMentionPopup()
+        edit.requestFocus()
+    }
+
+    private fun hideMentionPopup() {
+        mentionPopup?.dismiss()
+        mentionTokenStart = -1
+        mentionQuery = ""
+    }
+
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     private fun focusRoom(room: ChatRoom) {
         val index = roomsAdapter.getPositionOf(room.id)
@@ -78,6 +199,7 @@ class ChatHubActivity : BaseActivity() {
     private fun selectRoom(room: ChatRoom) {
         selectedRoom = room
         clearReply()
+        hideMentionPopup()
         binding.tvRoomTitle?.text = "# ${room.id}"
         roomsAdapter.setSelectedRoom(room.id)
         prefs.setLastChatRoomId(room.id)
@@ -182,6 +304,12 @@ class ChatHubActivity : BaseActivity() {
     ).sortedBy { it.order }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (mentionPopup?.isShowing == true) {
+            if (event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN || event.keyCode == KeyEvent.KEYCODE_DPAD_UP || event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == KeyEvent.KEYCODE_ENTER) {
+                return super.dispatchKeyEvent(event)
+            }
+        }
+
         if (event.action == KeyEvent.ACTION_DOWN) {
             val readOnly = binding.etMessage?.visibility == View.GONE
             val right = binding.rvMessages.hasFocus() || binding.etMessage?.hasFocus() == true || binding.btnSend?.hasFocus() == true || binding.btnCancelReply?.hasFocus() == true
@@ -238,6 +366,7 @@ class ChatHubActivity : BaseActivity() {
     }
 
     override fun onDestroy() {
+        hideMentionPopup()
         roomMessagesListener?.remove()
         roomLastMsgListeners.values.forEach { it.remove() }
         roomLastMsgListeners.clear()
