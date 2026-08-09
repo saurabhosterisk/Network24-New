@@ -11,7 +11,6 @@
                 <TableRow><TextView android:text="Quality" android:textColor="#A7B0C0" android:textStyle="bold"/><TextView android:id="@+id/tvHealthLabel" android:text="—" android:textColor="@android:color/white"/></TableRow>
                 <TableRow><TextView android:text="Rebuffers" android:textColor="#A7B0C0" android:textStyle="bold"/><TextView android:id="@+id/tvRebufferCount" android:text="—" android:textColor="@android:color/white"/></TableRow>
                 <TableRow><TextView android:text="Buffering Time" android:textColor="#A7B0C0" android:textStyle="bold"/><TextView android:id="@+id/tvBufferingTime" android:text="—" android:textColor="@android:color/white"/></TableRow>
-                <TableRow android:visibility="gone"><TextView android:text="Diagnosis"/><TextView android:id="@+id/tvDiagnosis" android:text="Checking…"/></TableRow>
             </TableLayout>
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
