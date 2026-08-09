@@ -22,6 +22,8 @@ class PreferenceManager(context: Context) {
         private const val KEY_IS_TRIAL = "is_trial"
 
         private const val KEY_LAST_SYNC_TIME = "last_sync_time"
+        private const val KEY_DISABLED_CATEGORIES = "disabled_live_category_ids"
+        private const val KEY_DISABLED_CATEGORIES_CACHED = "disabled_live_category_ids_cached"
 
         // Chat
         private const val KEY_CHAT_LAST_ROOM_ID = "chat_last_room_id"
@@ -37,12 +39,17 @@ class PreferenceManager(context: Context) {
         password: String,
         remember: Boolean
     ) {
-        prefs.edit()
+        val previousUsername = getUsername()
+        val editor = prefs.edit()
             .putString(KEY_SERVER, server)
             .putString(KEY_USERNAME, username)
             .putString(KEY_PASSWORD, password)
             .putBoolean(KEY_REMEMBER, remember)
-            .apply()
+        if (previousUsername.isNotBlank() && !previousUsername.equals(username, ignoreCase = true)) {
+            editor.remove(KEY_DISABLED_CATEGORIES)
+                .remove(KEY_DISABLED_CATEGORIES_CACHED)
+        }
+        editor.apply()
     }
 
     fun getServer(): String = prefs.getString(KEY_SERVER, "") ?: ""
@@ -118,6 +125,22 @@ class PreferenceManager(context: Context) {
 
     fun getLastSyncTime(): Long {
         return prefs.getLong(KEY_LAST_SYNC_TIME, 0L)
+    }
+
+    // -------------------------
+    // Live category settings cache
+    // -------------------------
+
+    fun setDisabledLiveCategoryIds(ids: Set<String>) {
+        prefs.edit()
+            .putStringSet(KEY_DISABLED_CATEGORIES, ids.toSet())
+            .putBoolean(KEY_DISABLED_CATEGORIES_CACHED, true)
+            .apply()
+    }
+
+    fun getDisabledLiveCategoryIds(): Set<String>? {
+        if (!prefs.getBoolean(KEY_DISABLED_CATEGORIES_CACHED, false)) return null
+        return prefs.getStringSet(KEY_DISABLED_CATEGORIES, emptySet())?.toSet() ?: emptySet()
     }
 
     // -------------------------
