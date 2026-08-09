@@ -53,17 +53,6 @@
                 android:textStyle="bold"
                 android:visibility="gone" />
         </LinearLayout>
-
-        <TextView
-            android:id="@+id/tvLastMessage"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:text="No messages yet"
-            android:textColor="#7F8A9A"
-            android:textSize="12sp"
-            android:maxLines="1"
-            android:ellipsize="end" />
     </LinearLayout>
 
     <TextView
