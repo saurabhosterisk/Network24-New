@@ -93,34 +93,18 @@ class DashboardActivity : BaseActivity() {
 
     private fun askNotificationPermissionIfNeeded() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            val granted = ContextCompat.checkSelfPermission(
-                this,
-                Manifest.permission.POST_NOTIFICATIONS
-            ) == PackageManager.PERMISSION_GRANTED
-
+            val granted = ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
             if (!granted) {
-                ActivityCompat.requestPermissions(
-                    this,
-                    arrayOf(Manifest.permission.POST_NOTIFICATIONS),
-                    REQ_POST_NOTIFICATIONS
-                )
+                ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), REQ_POST_NOTIFICATIONS)
             }
         }
     }
 
-    override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<out String>,
-        grantResults: IntArray
-    ) {
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
     }
 
-    private fun hasCredentials(): Boolean {
-        return prefs.getServer().isNotBlank() &&
-                prefs.getUsername().isNotBlank() &&
-                prefs.getPassword().isNotBlank()
-    }
+    private fun hasCredentials(): Boolean = prefs.getServer().isNotBlank() && prefs.getUsername().isNotBlank() && prefs.getPassword().isNotBlank()
 
     private fun loadDashboard() {
         binding.txtUserName.text = prefs.getUsername()
@@ -132,7 +116,6 @@ class DashboardActivity : BaseActivity() {
         if (expiry > 0) {
             val expiryDate = Date(expiry * 1000)
             binding.txtExpiry.text = SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(expiryDate)
-
             val remainingDays = TimeUnit.MILLISECONDS.toDays(expiryDate.time - System.currentTimeMillis())
             binding.txtRemaining.text = if (remainingDays > 0) "$remainingDays Days" else "Expired"
             binding.btnRenew.visibility = if (remainingDays <= 15) View.VISIBLE else View.GONE
@@ -144,32 +127,21 @@ class DashboardActivity : BaseActivity() {
     }
 
     private fun setupDashboardCardInteractions() {
-        val cards = listOf(
-            binding.cardLiveTv,
-            binding.cardFavorites,
-            binding.cardNotification,
-            binding.cardSupport,
-            binding.cardSettings,
-            binding.cardLiveEvents
-        )
-
+        val cards = listOf(binding.cardLiveTv, binding.cardFavorites, binding.cardNotification, binding.cardSupport, binding.cardSettings, binding.cardLiveEvents)
         val normalColor = ContextCompat.getColor(this, R.color.card)
         val focusedColor = Color.rgb(38, 48, 68)
-        // Use the clean white focus treatment from the original dashboard instead of red.
         val focusStroke = Color.WHITE
         val density = resources.displayMetrics.density
         val normalElevation = 3f * density
-        val focusedElevation = 8f * density
-        val normalStroke = 0
-        val focusedStroke = (3f * density).toInt()
+        val focusedElevation = 7f * density
+        val focusedStroke = (1f * density).toInt()
 
         cards.forEach { card ->
             card.isFocusable = true
             card.isClickable = true
-            card.strokeWidth = normalStroke
+            card.strokeWidth = 0
             card.strokeColor = Color.TRANSPARENT
             card.cardElevation = normalElevation
-
             enlargeDashboardIcons(card, 42)
 
             card.setOnFocusChangeListener { view, hasFocus ->
@@ -179,21 +151,13 @@ class DashboardActivity : BaseActivity() {
                     materialCard.strokeWidth = focusedStroke
                     materialCard.strokeColor = focusStroke
                     materialCard.cardElevation = focusedElevation
-                    materialCard.animate()
-                        .scaleX(1.018f)
-                        .scaleY(1.018f)
-                        .setDuration(120)
-                        .start()
+                    materialCard.animate().scaleX(1.018f).scaleY(1.018f).setDuration(120).start()
                 } else {
                     materialCard.setCardBackgroundColor(normalColor)
-                    materialCard.strokeWidth = normalStroke
+                    materialCard.strokeWidth = 0
                     materialCard.strokeColor = Color.TRANSPARENT
                     materialCard.cardElevation = normalElevation
-                    materialCard.animate()
-                        .scaleX(1f)
-                        .scaleY(1f)
-                        .setDuration(100)
-                        .start()
+                    materialCard.animate().scaleX(1f).scaleY(1f).setDuration(100).start()
                 }
             }
         }
@@ -202,13 +166,9 @@ class DashboardActivity : BaseActivity() {
     private fun enlargeDashboardIcons(card: ViewGroup, sizeDp: Int) {
         val sizePx = (sizeDp * resources.displayMetrics.density).toInt()
         for (index in 0 until card.childCount) {
-            val child = card.getChildAt(index)
-            when (child) {
+            when (val child = card.getChildAt(index)) {
                 is ImageView -> {
-                    child.layoutParams = child.layoutParams.apply {
-                        width = sizePx
-                        height = sizePx
-                    }
+                    child.layoutParams = child.layoutParams.apply { width = sizePx; height = sizePx }
                     child.scaleType = ImageView.ScaleType.CENTER_INSIDE
                     child.requestLayout()
                 }
@@ -219,38 +179,16 @@ class DashboardActivity : BaseActivity() {
 
     private fun setupDrawerAndMenu() {
         binding.btnMore.setOnClickListener { openRightDrawer(binding.drawerLayout) }
-
-        setupOptionalRightDrawerMenu(
-            drawerLayout = binding.drawerLayout,
-            navView = binding.rightNav
-        ) { itemId ->
+        setupOptionalRightDrawerMenu(binding.drawerLayout, binding.rightNav) { itemId ->
             when (itemId) {
-                R.id.action_home -> {
-                    closeRightDrawer(binding.drawerLayout)
-                    true
-                }
-                R.id.action_refresh_all -> {
-                    syncInitialData(forceRefresh = true)
-                    true
-                }
-                R.id.action_refresh_guide -> {
-                    refreshTvGuide()
-                    true
-                }
-                R.id.action_settings -> {
-                    startActivity(Intent(this, SettingsActivity::class.java))
-                    true
-                }
-                R.id.action_logout -> {
-                    prefs.clear()
-                    startActivity(Intent(this, LoginActivity::class.java))
-                    finishAffinity()
-                    true
-                }
+                R.id.action_home -> { closeRightDrawer(binding.drawerLayout); true }
+                R.id.action_refresh_all -> { syncInitialData(forceRefresh = true); true }
+                R.id.action_refresh_guide -> { refreshTvGuide(); true }
+                R.id.action_settings -> { startActivity(Intent(this, SettingsActivity::class.java)); true }
+                R.id.action_logout -> { prefs.clear(); startActivity(Intent(this, LoginActivity::class.java)); finishAffinity(); true }
                 else -> false
             }
         }
-
         binding.drawerLayout.addDrawerListener(object : DrawerLayout.SimpleDrawerListener() {
             override fun onDrawerOpened(drawerView: View) {
                 if (drawerView.id == binding.rightNav.id) {
@@ -259,10 +197,7 @@ class DashboardActivity : BaseActivity() {
                         if (menuView != null) {
                             for (i in 0 until menuView.childCount) {
                                 val child = menuView.getChildAt(i)
-                                if (child.isFocusable) {
-                                    child.requestFocus()
-                                    break
-                                }
+                                if (child.isFocusable) { child.requestFocus(); break }
                             }
                         }
                     }
@@ -272,159 +207,47 @@ class DashboardActivity : BaseActivity() {
     }
 
     private fun setClickListeners() {
-        binding.cardLiveTv.setOnClickListener {
-            startActivity(Intent(this, LiveCategoryActivity::class.java))
-        }
-
-        binding.cardFavorites.setOnClickListener {
-            startActivity(Intent(this, FavoriteChannelsActivity::class.java))
-        }
-
-        binding.cardNotification.setOnClickListener {
-            Toast.makeText(this, "Notifications", Toast.LENGTH_SHORT).show()
-        }
-
+        binding.cardLiveTv.setOnClickListener { startActivity(Intent(this, LiveCategoryActivity::class.java)) }
+        binding.cardFavorites.setOnClickListener { startActivity(Intent(this, FavoriteChannelsActivity::class.java)) }
+        binding.cardNotification.setOnClickListener { Toast.makeText(this, "Notifications", Toast.LENGTH_SHORT).show() }
         val supportContent = binding.cardSupport.getChildAt(0) as? LinearLayout
         (supportContent?.getChildAt(0) as? ImageView)?.setImageResource(R.drawable.ic_live_chat)
         (supportContent?.getChildAt(1) as? TextView)?.text = "Live Chat"
-
-        binding.cardSupport.setOnClickListener {
-            startActivity(Intent(this, ChatHubActivity::class.java))
-        }
-
-        binding.cardSettings.setOnClickListener {
-            startActivity(Intent(this, SettingsActivity::class.java))
-        }
-
-        binding.btnRenew.setOnClickListener {
-            showRenewPaymentQr()
-        }
+        binding.cardSupport.setOnClickListener { startActivity(Intent(this, ChatHubActivity::class.java)) }
+        binding.cardSettings.setOnClickListener { startActivity(Intent(this, SettingsActivity::class.java)) }
+        binding.btnRenew.setOnClickListener { showRenewPaymentQr() }
     }
 
     private fun showRenewPaymentQr() {
         val qrSize = 720
-        val matrix: BitMatrix = MultiFormatWriter().encode(
-            PAYMENT_URL,
-            BarcodeFormat.QR_CODE,
-            qrSize,
-            qrSize
-        )
-
+        val matrix: BitMatrix = MultiFormatWriter().encode(PAYMENT_URL, BarcodeFormat.QR_CODE, qrSize, qrSize)
         val pixels = IntArray(qrSize * qrSize)
         for (y in 0 until qrSize) {
             val offset = y * qrSize
-            for (x in 0 until qrSize) {
-                pixels[offset + x] = if (matrix[x, y]) Color.BLACK else Color.WHITE
-            }
+            for (x in 0 until qrSize) pixels[offset + x] = if (matrix[x, y]) Color.BLACK else Color.WHITE
         }
-
-        val qrBitmap = Bitmap.createBitmap(
-            pixels,
-            0,
-            qrSize,
-            qrSize,
-            qrSize,
-            Bitmap.Config.ARGB_8888
-        )
-
-        val container = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(28, 8, 28, 12)
-        }
-
-        val instruction = TextView(this).apply {
-            text = "Renew your subscription in just a few steps"
-            gravity = Gravity.CENTER
-            textSize = 18f
-            setTextColor(Color.rgb(30, 30, 30))
-            setTypeface(typeface, android.graphics.Typeface.BOLD)
-            setPadding(0, 4, 0, 10)
-        }
-
-        val steps = TextView(this).apply {
-            text = "1. Open your phone's camera.\n2. Point the camera at the QR code below.\n3. Tap the link that appears on your phone.\n4. Follow the instructions on the payment page to renew your subscription."
-            gravity = Gravity.CENTER
-            textSize = 15f
-            setTextColor(Color.DKGRAY)
-            setLineSpacing(2f, 1.05f)
-            setPadding(8, 0, 8, 10)
-        }
-
-        val imageView = ImageView(this).apply {
-            setImageBitmap(qrBitmap)
-            adjustViewBounds = true
-            setPadding(8, 8, 8, 12)
-            contentDescription = "QR code to open the subscription payment page"
-        }
-
-        val scanHint = TextView(this).apply {
-            text = "📱 Scan this code with another phone to open the payment page."
-            gravity = Gravity.CENTER
-            textSize = 14f
-            setTextColor(Color.rgb(55, 55, 55))
-            setTypeface(typeface, android.graphics.Typeface.BOLD)
-            setPadding(8, 2, 8, 8)
-        }
-
-        container.addView(instruction)
-        container.addView(steps)
-        container.addView(imageView, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        ))
-        container.addView(scanHint)
-
-        AlertDialog.Builder(this)
-            .setView(container)
-            .setNegativeButton("Close", null)
-            .setPositiveButton("Open Payment Page") { _, _ ->
-                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(PAYMENT_URL)))
-            }
-            .show()
+        val qrBitmap = Bitmap.createBitmap(pixels, 0, qrSize, qrSize, qrSize, Bitmap.Config.ARGB_8888)
+        val container = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL; setPadding(28, 8, 28, 12) }
+        val instruction = TextView(this).apply { text = "Renew your subscription in just a few steps"; gravity = Gravity.CENTER; textSize = 18f; setTextColor(Color.rgb(30, 30, 30)); setTypeface(typeface, android.graphics.Typeface.BOLD); setPadding(0, 4, 0, 10) }
+        val steps = TextView(this).apply { text = "1. Open your phone's camera.\n2. Point the camera at the QR code below.\n3. Tap the link that appears on your phone.\n4. Follow the instructions on the payment page to renew your subscription."; gravity = Gravity.CENTER; textSize = 15f; setTextColor(Color.DKGRAY); setLineSpacing(2f, 1.05f); setPadding(8, 0, 8, 10) }
+        val imageView = ImageView(this).apply { setImageBitmap(qrBitmap); adjustViewBounds = true; setPadding(8, 8, 8, 12); contentDescription = "QR code to open the subscription payment page" }
+        val scanHint = TextView(this).apply { text = "📱 Scan this code with another phone to open the payment page."; gravity = Gravity.CENTER; textSize = 14f; setTextColor(Color.rgb(55, 55, 55)); setTypeface(typeface, android.graphics.Typeface.BOLD); setPadding(8, 2, 8, 8) }
+        container.addView(instruction); container.addView(steps); container.addView(imageView, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)); container.addView(scanHint)
+        AlertDialog.Builder(this).setView(container).setNegativeButton("Close", null).setPositiveButton("Open Payment Page") { _, _ -> startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(PAYMENT_URL))) }.show()
     }
 
     private fun syncInitialData(forceRefresh: Boolean = false) {
-        if (!hasCredentials()) return
-        if (isInitialSyncRunning) return
-
-        val lastSyncTime = prefs.getLastSyncTime()
-        val currentTime = System.currentTimeMillis()
-        val twentyFourHoursInMillis = 24L * 60L * 60L * 1000L
-        val isFirstSync = lastSyncTime <= 0L
-
-        if (!forceRefresh && !isFirstSync && (currentTime - lastSyncTime < twentyFourHoursInMillis)) {
-            return
-        }
-
+        if (!hasCredentials() || isInitialSyncRunning) return
+        val lastSyncTime = prefs.getLastSyncTime(); val currentTime = System.currentTimeMillis(); val twentyFourHoursInMillis = 24L * 60L * 60L * 1000L; val isFirstSync = lastSyncTime <= 0L
+        if (!forceRefresh && !isFirstSync && (currentTime - lastSyncTime < twentyFourHoursInMillis)) return
         isInitialSyncRunning = true
-
-        runCallbackSyncWithLoader(
-            loadingMessage = "Refreshing categories & channels…",
-            successMessage = "Channels Updated Successfully!"
-        ) { ok, fail ->
-            repository.syncAllData(
-                server = prefs.getServer(),
-                username = prefs.getUsername(),
-                password = prefs.getPassword(),
-                callback = object : SyncCallback {
-                    override fun onSuccess() {
-                        isInitialSyncRunning = false
-                        prefs.setLastSyncTime(System.currentTimeMillis())
-                        ok()
-                    }
-
-                    override fun onError(message: String) {
-                        isInitialSyncRunning = false
-                        fail("Failed to update: $message")
-                    }
-                }
-            )
+        runCallbackSyncWithLoader(loadingMessage = "Refreshing categories & channels…", successMessage = "Channels Updated Successfully!") { ok, fail ->
+            repository.syncAllData(server = prefs.getServer(), username = prefs.getUsername(), password = prefs.getPassword(), callback = object : SyncCallback {
+                override fun onSuccess() { isInitialSyncRunning = false; prefs.setLastSyncTime(System.currentTimeMillis()); ok() }
+                override fun onError(message: String) { isInitialSyncRunning = false; fail("Failed to update: $message") }
+            })
         }
     }
 
-    override fun onDestroy() {
-        super.onDestroy()
-        handler.removeCallbacks(clockRunnable)
-    }
+    override fun onDestroy() { super.onDestroy(); handler.removeCallbacks(clockRunnable) }
 }
