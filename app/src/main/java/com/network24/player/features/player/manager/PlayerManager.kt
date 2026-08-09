@@ -90,6 +90,14 @@ object PlayerManager {
     }
 
     fun play(context: Context, playerView: PlayerView, streamUrl: String) {
+        // A channel switch must terminate the previous ExoPlayer instance.
+        // stop()/clearMediaItems() normally stops playback, but explicitly
+        // releasing the old player guarantees that its HLS/DataSource requests
+        // are closed before the new channel creates another connection.
+        if (currentUrl != null && currentUrl != streamUrl) {
+            releaseCurrentStreamForSwitch()
+        }
+
         val player = getPlayer(context)
         attach(context, playerView)
 
@@ -110,6 +118,18 @@ object PlayerManager {
         player.play()
     }
 
+    private fun releaseCurrentStreamForSwitch() {
+        currentPlayerView?.player = null
+        currentPlayerView = null
+
+        exoPlayer?.stop()
+        exoPlayer?.clearMediaItems()
+        exoPlayer?.release()
+        exoPlayer = null
+        currentUrl = null
+        resetDiagnostics()
+    }
+
     fun retryCurrent() {
         val player = exoPlayer ?: return
         if (currentUrl.isNullOrBlank()) return
@@ -122,6 +142,7 @@ object PlayerManager {
 
     fun stop() {
         exoPlayer?.stop()
+        exoPlayer?.clearMediaItems()
         currentUrl = null
     }
 
