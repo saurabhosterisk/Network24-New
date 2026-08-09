@@ -6,13 +6,8 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-
-    <uses-feature
-        android:name="android.software.leanback"
-        android:required="false" />
-    <uses-feature
-        android:name="android.hardware.touchscreen"
-        android:required="false" />
+    <uses-feature android:name="android.software.leanback" android:required="false" />
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
 
     <application
         android:allowBackup="true"
@@ -23,7 +18,6 @@
         android:banner="@drawable/tv_banner"
         android:name=".Network24App"
         android:roundIcon="@mipmap/ic_launcher_round"
-
         android:supportsRtl="true"
         android:usesCleartextTraffic="true"
         android:theme="@style/Theme.Network24">
@@ -33,62 +27,32 @@
             android:authorities="${applicationId}.provider"
             android:exported="false"
             android:grantUriPermissions="true">
-
             <meta-data
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"/>
-
         </provider>
 
-        <activity
-            android:name=".features.player.activity.PlayerActivity"
-            android:exported="false"
-            android:screenOrientation="landscape" />
-
-        <activity
-            android:name=".features.live.activity.ChannelListActivity"
-            android:exported="false"
-            android:screenOrientation="landscape" />
-        <activity
-            android:name=".features.live.activity.FavoriteChannelsActivity"
-            android:exported="false"
-            android:screenOrientation="landscape" />
-
-        <activity
-            android:name=".features.login.activity.LoginActivity"
-            android:exported="false"
-            android:screenOrientation="landscape" />
-
-        <activity android:name="com.network24.player.features.chat.activity.ChatHubActivity"
-        android:exported="false"
-        android:screenOrientation="landscape" />
-
-        <activity
-            android:name=".features.dashboard.activity.DashboardActivity"
-            android:exported="false"
-            android:screenOrientation="landscape"/>
-
-        <activity
-        android:name=".features.live.activity.LiveCategoryActivity"
-        android:exported="false"
-        android:screenOrientation="landscape"/>
+        <activity android:name=".features.player.activity.PlayerActivity" android:exported="false" android:screenOrientation="landscape" />
+        <activity android:name=".features.live.activity.ChannelListActivity" android:exported="false" android:screenOrientation="landscape" />
+        <activity android:name=".features.live.activity.FavoriteChannelsActivity" android:exported="false" android:screenOrientation="landscape" />
+        <activity android:name=".features.login.activity.LoginActivity" android:exported="false" android:screenOrientation="landscape" />
+        <activity android:name="com.network24.player.features.chat.activity.ChatHubActivity" android:exported="false" android:screenOrientation="landscape" />
+        <activity android:name=".features.dashboard.activity.DashboardActivity" android:exported="false" android:screenOrientation="landscape"/>
+        <activity android:name=".features.live.activity.LiveCategoryActivity" android:exported="false" android:screenOrientation="landscape"/>
+        <activity android:name=".features.live.activity.ManageCategoriesActivity" android:exported="false" android:screenOrientation="landscape"/>
+        <activity android:name=".features.settings.activity.SettingsActivity" android:exported="false" />
 
         <activity
             android:name=".features.splash.activity.SplashActivity"
             android:exported="true"
             android:screenOrientation="landscape"
             android:banner="@drawable/tv_banner">
-
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
-
         </activity>
-
-            <activity android:name=".features.settings.activity.SettingsActivity" android:exported="false" />
-</application>
+    </application>
 
 </manifest>
