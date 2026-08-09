@@ -80,6 +80,32 @@ class ChatRepository(
             .addOnFailureListener { onError(it) }
     }
 
+    fun reportMessage(
+        roomId: String,
+        message: ChatMessage,
+        reporterId: String,
+        reporterName: String,
+        onOk: () -> Unit,
+        onError: (Exception) -> Unit
+    ) {
+        val payload = hashMapOf<String, Any>(
+            "roomId" to roomId,
+            "messageId" to message.id,
+            "messageText" to message.text.take(1000),
+            "messageSenderId" to message.senderId,
+            "messageSenderName" to message.senderName,
+            "reporterId" to reporterId,
+            "reporterName" to reporterName,
+            "ts" to FieldValue.serverTimestamp(),
+            "status" to "open"
+        )
+
+        db.collection("chat_reports")
+            .add(payload)
+            .addOnSuccessListener { onOk() }
+            .addOnFailureListener { onError(it) }
+    }
+
     private fun DocumentSnapshot.toChatMessageOrNull(): ChatMessage? {
         val text = getString("text") ?: return null
         val senderId = getString("senderId") ?: ""
