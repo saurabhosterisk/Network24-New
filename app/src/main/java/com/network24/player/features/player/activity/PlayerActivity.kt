@@ -40,7 +40,7 @@ class PlayerActivity : BaseActivity() {
     private lateinit var repository: LiveRepository
 
     private var retryCount = 0
-    private val MAX_RETRIES = 3
+    private val MAX_RETRIES = 8
     private var retryJob: Job? = null
 
     private var isSubtitleEnabled = false
@@ -68,7 +68,6 @@ class PlayerActivity : BaseActivity() {
                 binding.progressBar.visibility = View.GONE
                 if (playbackState == Player.STATE_READY) {
                     retryCount = 0
-                    // ✅ Hide error and report button when playback works
                     binding.txtPlayerError.visibility = View.GONE
                     binding.btnReportChannel.visibility = View.GONE
                 }
@@ -88,31 +87,37 @@ class PlayerActivity : BaseActivity() {
 
             if (retryCount < MAX_RETRIES) {
                 retryCount++
+                val delayMs = when (retryCount) {
+                    1 -> 2000L
+                    2 -> 3000L
+                    3 -> 5000L
+                    4 -> 7000L
+                    5 -> 10000L
+                    6 -> 12000L
+                    7 -> 15000L
+                    else -> 20000L
+                }
                 val toastMsg = "Reconnecting... ($retryCount/$MAX_RETRIES)"
                 Toast.makeText(this@PlayerActivity, toastMsg, Toast.LENGTH_SHORT).show()
 
                 retryJob?.cancel()
                 retryJob = lifecycleScope.launch(Dispatchers.Main) {
-                    delay(3000)
-                    val currentChannel = PlayerState.currentChannel()
-                    if (currentChannel != null) {
-                        val streamUrl = buildStreamUrl(currentChannel)
+                    delay(delayMs)
+                    if (!isFinishing && !isDestroyed) {
                         binding.progressBar.visibility = View.VISIBLE
                         binding.txtPlayerError.visibility = View.GONE
                         binding.btnReportChannel.visibility = View.GONE
-                        PlayerManager.play(this@PlayerActivity, binding.playerView, streamUrl)
+                        PlayerManager.retryCurrent()
                     }
                 }
             } else {
                 binding.progressBar.visibility = View.GONE
+                binding.txtPlayerError.text = "Unable to play this stream right now. It may be temporarily unavailable or your connection may be unstable."
                 binding.txtPlayerError.visibility = View.VISIBLE
-
-                // ✅ Show the report button when max retries fail
                 binding.btnReportChannel.visibility = View.VISIBLE
                 binding.btnReportChannel.post {
-                    binding.btnReportChannel.requestFocus() // Request focus for TV users
+                    binding.btnReportChannel.requestFocus()
                 }
-
                 showUiWithTimeout()
             }
         }
@@ -161,23 +166,11 @@ class PlayerActivity : BaseActivity() {
         binding.playerView.setOnClickListener { toggleUi() }
 
         binding.btnPlayPause.setOnClickListener {
-            if (PlayerManager.isPlaying()) {
-                PlayerManager.pause()
-            } else {
-                PlayerManager.resume()
-            }
+            if (PlayerManager.isPlaying()) PlayerManager.pause() else PlayerManager.resume()
             showUiWithTimeout()
         }
-
-        binding.btnNext.setOnClickListener {
-            playNextChannel()
-            showUiWithTimeout()
-        }
-
-        binding.btnPrev.setOnClickListener {
-            playPreviousChannel()
-            showUiWithTimeout()
-        }
+        binding.btnNext.setOnClickListener { playNextChannel(); showUiWithTimeout() }
+        binding.btnPrev.setOnClickListener { playPreviousChannel(); showUiWithTimeout() }
 
         binding.btnInfo.setOnClickListener {
             val currentChannel = PlayerState.currentChannel()
@@ -186,32 +179,17 @@ class PlayerActivity : BaseActivity() {
                 Toast.makeText(this, "Channel not available", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
-
-            StreamInfoDialog.newInstance(streamId.toString())
-                .show(supportFragmentManager, "StreamInfoDialog")
-
+            StreamInfoDialog.newInstance(streamId.toString()).show(supportFragmentManager, "StreamInfoDialog")
             showUiWithTimeout()
         }
 
         binding.btnAspect.setOnClickListener {
             currentAspectRatioIndex = (currentAspectRatioIndex + 1) % 4
             val toastMessage = when (currentAspectRatioIndex) {
-                0 -> {
-                    binding.playerView.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-                    "Aspect Ratio: Fit"
-                }
-                1 -> {
-                    binding.playerView.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FILL
-                    "Aspect Ratio: Fill"
-                }
-                2 -> {
-                    binding.playerView.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-                    "Aspect Ratio: Zoom"
-                }
-                3 -> {
-                    binding.playerView.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH
-                    "Aspect Ratio: Fixed Width"
-                }
+                0 -> { binding.playerView.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT; "Aspect Ratio: Fit" }
+                1 -> { binding.playerView.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FILL; "Aspect Ratio: Fill" }
+                2 -> { binding.playerView.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM; "Aspect Ratio: Zoom" }
+                3 -> { binding.playerView.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH; "Aspect Ratio: Fixed Width" }
                 else -> "Aspect Ratio: Fit"
             }
             Toast.makeText(this, toastMessage, Toast.LENGTH_SHORT).show()
@@ -221,69 +199,40 @@ class PlayerActivity : BaseActivity() {
         binding.btnSubtitle.setOnClickListener {
             isSubtitleEnabled = !isSubtitleEnabled
             toggleSubtitles(isSubtitleEnabled)
-            val msg = if (isSubtitleEnabled) "Subtitles Enabled" else "Subtitles Disabled"
-            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, if (isSubtitleEnabled) "Subtitles Enabled" else "Subtitles Disabled", Toast.LENGTH_SHORT).show()
             showUiWithTimeout()
         }
 
-        // ✅ NEW: Report Channel Logic (Send to "General Chat")
         binding.btnReportChannel.setOnClickListener {
             val currentChannel = PlayerState.currentChannel()
             val channelName = currentChannel?.name ?: "Unknown Channel"
             val username = prefs.getUsername()
-
             val alertMessage = "🚨 System Alert : $username reported that the channel '$channelName' is currently down."
-
-            // 1. EXACT FIELD NAMES TO MATCH ChatRepository & ChatHubActivity
             val chatData = hashMapOf(
                 "senderId" to "system_bot",
                 "senderName" to "System",
                 "text" to alertMessage,
-                "ts" to com.google.firebase.firestore.FieldValue.serverTimestamp() // 🔥 IMPORTANT: "ts" instead of "timestamp"
+                "ts" to com.google.firebase.firestore.FieldValue.serverTimestamp()
             )
-
             val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
-
-            // 2. Hide button immediately
             binding.btnReportChannel.visibility = View.GONE
             binding.txtPlayerError.text = "Sending report..."
-
-            // 3. Collection path exact match with ChatHubActivity ("general" room)
-            db.collection("rooms")
-                .document("channel_down")
-                .collection("messages")
-                .add(chatData)
-                .addOnSuccessListener {
-                    binding.txtPlayerError.text = "Channel reported. Our team will look into it."
-                }
+            db.collection("rooms").document("channel_down").collection("messages").add(chatData)
+                .addOnSuccessListener { binding.txtPlayerError.text = "Channel reported. Our team will look into it." }
                 .addOnFailureListener { exception ->
                     binding.btnReportChannel.visibility = View.VISIBLE
                     binding.txtPlayerError.text = "Failed to send report."
-                    Toast.makeText(
-                        this@PlayerActivity,
-                        "Error: ${exception.message}",
-                        Toast.LENGTH_LONG
-                    ).show()
+                    Toast.makeText(this@PlayerActivity, "Error: ${exception.message}", Toast.LENGTH_LONG).show()
                 }
         }
-
-
-
-
     }
 
     private fun toggleSubtitles(enable: Boolean) {
         val player = binding.playerView.player ?: return
-        player.trackSelectionParameters = player.trackSelectionParameters
-            .buildUpon()
+        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !enable)
             .build()
-
-        if (enable) {
-            binding.btnSubtitle.setColorFilter(Color.parseColor("#FFC107"))
-        } else {
-            binding.btnSubtitle.setColorFilter(Color.WHITE)
-        }
+        binding.btnSubtitle.setColorFilter(if (enable) Color.parseColor("#FFC107") else Color.WHITE)
     }
 
     override fun onResume() {
@@ -291,27 +240,24 @@ class PlayerActivity : BaseActivity() {
         PlayerManager.attach(this, binding.playerView)
         PlayerManager.resume()
         binding.playerView.player?.addListener(playerListener)
-
-        val currentState = binding.playerView.player?.playbackState
-
-        if (currentState == Player.STATE_READY) {
-            binding.progressBar.visibility = View.GONE
-            binding.txtPlayerError.visibility = View.GONE
-            binding.btnReportChannel.visibility = View.GONE
-        } else if (currentState == Player.STATE_BUFFERING) {
-            binding.progressBar.visibility = View.VISIBLE
-        } else if (binding.playerView.player?.playerError != null) {
-            binding.progressBar.visibility = View.GONE
-            binding.txtPlayerError.visibility = View.VISIBLE
-            binding.btnReportChannel.visibility = View.VISIBLE // Keep it visible if returning to error state
+        when {
+            binding.playerView.player?.playbackState == Player.STATE_READY -> {
+                binding.progressBar.visibility = View.GONE
+                binding.txtPlayerError.visibility = View.GONE
+                binding.btnReportChannel.visibility = View.GONE
+            }
+            binding.playerView.player?.playbackState == Player.STATE_BUFFERING -> {
+                binding.progressBar.visibility = View.VISIBLE
+            }
+            binding.playerView.player?.playerError != null -> {
+                binding.progressBar.visibility = View.GONE
+                binding.txtPlayerError.visibility = View.VISIBLE
+                binding.btnReportChannel.visibility = View.VISIBLE
+            }
         }
-
         toggleSubtitles(isSubtitleEnabled)
         showUiWithTimeout()
-
-        binding.root.postDelayed({
-            binding.btnPlayPause.requestFocus()
-        }, 350)
+        binding.root.postDelayed({ binding.btnPlayPause.requestFocus() }, 350)
     }
 
     override fun onPause() {
@@ -334,23 +280,15 @@ class PlayerActivity : BaseActivity() {
             binding.topTint.alpha = 0f
             binding.topTint.visibility = View.VISIBLE
             binding.topTint.animate().alpha(1f).setDuration(animationDuration).start()
-
             binding.txtChannelTitle.alpha = 0f
             binding.txtChannelTitle.visibility = View.VISIBLE
             binding.txtChannelTitle.animate().alpha(1f).setDuration(animationDuration).start()
-
             binding.bottomOverlay.alpha = 0f
             binding.bottomOverlay.translationY = 50f
             binding.bottomOverlay.visibility = View.VISIBLE
-            binding.bottomOverlay.animate().alpha(1f).translationY(0f).setDuration(animationDuration)
-                .withEndAction {
-                    // Only request focus on play if report button isn't visible (handling TV remotes)
-                    if (binding.btnReportChannel.visibility != View.VISIBLE) {
-                        binding.btnPlayPause.post {
-                            binding.btnPlayPause.requestFocus()
-                        }
-                    }
-                }.start()
+            binding.bottomOverlay.animate().alpha(1f).translationY(0f).setDuration(animationDuration).withEndAction {
+                if (binding.btnReportChannel.visibility != View.VISIBLE) binding.btnPlayPause.post { binding.btnPlayPause.requestFocus() }
+            }.start()
         }
         hideHandler.removeCallbacks(hideRunnable)
         hideHandler.postDelayed(hideRunnable, 5000)
@@ -360,26 +298,20 @@ class PlayerActivity : BaseActivity() {
         if (binding.bottomOverlay.visibility == View.VISIBLE) {
             hideHandler.removeCallbacks(hideRunnable)
             hideRunnable.run()
-        } else {
-            showUiWithTimeout()
-        }
+        } else showUiWithTimeout()
     }
 
     private fun playNextChannel() {
-        val nextChannel = PlayerState.next()
-        if (nextChannel != null) {
-            val streamUrl = buildStreamUrl(nextChannel)
-            PlayerManager.play(this, binding.playerView, streamUrl)
+        PlayerState.next()?.let { nextChannel ->
+            PlayerManager.play(this, binding.playerView, buildStreamUrl(nextChannel))
             updateChannelUI(nextChannel)
             toggleSubtitles(isSubtitleEnabled)
         }
     }
 
     private fun playPreviousChannel() {
-        val prevChannel = PlayerState.previous()
-        if (prevChannel != null) {
-            val streamUrl = buildStreamUrl(prevChannel)
-            PlayerManager.play(this, binding.playerView, streamUrl)
+        PlayerState.previous()?.let { prevChannel ->
+            PlayerManager.play(this, binding.playerView, buildStreamUrl(prevChannel))
             updateChannelUI(prevChannel)
             toggleSubtitles(isSubtitleEnabled)
         }
@@ -388,25 +320,16 @@ class PlayerActivity : BaseActivity() {
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         if (binding.bottomOverlay.visibility != View.VISIBLE) {
             when (keyCode) {
-                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER,
-                KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN,
-                KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                    showUiWithTimeout()
-                    return true
+                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                    showUiWithTimeout(); return true
                 }
             }
         } else {
             hideHandler.removeCallbacks(hideRunnable)
             hideHandler.postDelayed(hideRunnable, 5000)
             when (keyCode) {
-                KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_DPAD_UP -> {
-                    playNextChannel()
-                    return true
-                }
-                KeyEvent.KEYCODE_CHANNEL_DOWN, KeyEvent.KEYCODE_DPAD_DOWN -> {
-                    playPreviousChannel()
-                    return true
-                }
+                KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_DPAD_UP -> { playNextChannel(); return true }
+                KeyEvent.KEYCODE_CHANNEL_DOWN, KeyEvent.KEYCODE_DPAD_DOWN -> { playPreviousChannel(); return true }
             }
         }
         if (keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) {
@@ -419,39 +342,28 @@ class PlayerActivity : BaseActivity() {
 
     private fun updateChannelUI(channel: LiveChannel?) {
         if (channel == null) return
-
         retryJob?.cancel()
         retryCount = 0
         binding.txtPlayerError.visibility = View.GONE
-        binding.btnReportChannel.visibility = View.GONE // Ensure it is hidden on new channel
-
+        binding.btnReportChannel.visibility = View.GONE
         val num = channel.num?.let { "$it - " } ?: ""
-        val name = channel.name ?: "Unknown Channel"
-        binding.txtChannelTitle.text = "$num$name"
-
+        binding.txtChannelTitle.text = "$num${channel.name ?: "Unknown Channel"}"
         val epgId = channel.epg_channel_id ?: channel.stream_id?.toString() ?: ""
-        if (epgId.isNotEmpty()) {
-            loadEpg(epgId)
-        }
+        if (epgId.isNotEmpty()) loadEpg(epgId)
     }
 
     private fun loadEpg(epgId: String) {
         lifecycleScope.launch(Dispatchers.IO) {
             try {
                 val (nowEpg, nextEpg) = repository.getNowNextEpg(epgId)
-                withContext(Dispatchers.Main) {
-                    updateEpg(nowEpg, nextEpg)
-                }
+                withContext(Dispatchers.Main) { updateEpg(nowEpg, nextEpg) }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
                     binding.txtNowTitle.text = "No EPG Data"
                     binding.txtNextTitle.text = ""
                     binding.txtNowTime.text = ""
                     binding.txtNextTime.text = ""
-
-                    val layoutParams = binding.epgProgress.layoutParams
-                    layoutParams.width = 0
-                    binding.epgProgress.layoutParams = layoutParams
+                    binding.epgProgress.layoutParams = binding.epgProgress.layoutParams.apply { width = 0 }
                 }
             }
         }
@@ -461,22 +373,15 @@ class PlayerActivity : BaseActivity() {
         if (now != null) {
             binding.txtNowTitle.text = now.title ?: "No Program Info"
             binding.txtNowTime.text = "${formatTime(now.startTimestamp)} - ${formatTime(now.stopTimestamp)}"
-
             val progressPercent = calculateEpgProgress(now.startTimestamp, now.stopTimestamp)
             binding.epgTrack.post {
-                val trackWidth = binding.epgTrack.width
-                val layoutParams = binding.epgProgress.layoutParams
-                layoutParams.width = (trackWidth * progressPercent).toInt()
-                binding.epgProgress.layoutParams = layoutParams
+                binding.epgProgress.layoutParams = binding.epgProgress.layoutParams.apply { width = (binding.epgTrack.width * progressPercent).toInt() }
             }
         } else {
             binding.txtNowTitle.text = "No Program Info"
             binding.txtNowTime.text = ""
-            val layoutParams = binding.epgProgress.layoutParams
-            layoutParams.width = 0
-            binding.epgProgress.layoutParams = layoutParams
+            binding.epgProgress.layoutParams = binding.epgProgress.layoutParams.apply { width = 0 }
         }
-
         if (next != null) {
             binding.txtNextTitle.text = next.title ?: ""
             binding.txtNextTime.text = "${formatTime(next.startTimestamp)} - ${formatTime(next.stopTimestamp)}"
@@ -488,26 +393,17 @@ class PlayerActivity : BaseActivity() {
 
     private fun formatTime(timeMs: Long?): String {
         if (timeMs == null || timeMs == 0L) return ""
-        return try {
-            val output = SimpleDateFormat("hh:mm a", Locale.getDefault())
-            output.format(timeMs)
-        } catch (e: Exception) {
-            ""
-        }
+        return try { SimpleDateFormat("hh:mm a", Locale.getDefault()).format(java.util.Date(timeMs)) } catch (e: Exception) { "" }
     }
 
-    private fun calculateEpgProgress(startTimeMs: Long?, endTimeMs: Long?): Float {
-        if (startTimeMs == null || endTimeMs == null || startTimeMs == 0L || endTimeMs == 0L) return 0f
-        return try {
-            val currentTime = System.currentTimeMillis()
-            if (currentTime <= startTimeMs) return 0f
-            if (currentTime >= endTimeMs) return 1f
+    private fun calculateEpgProgress(startMs: Long?, stopMs: Long?): Float {
+        if (startMs == null || stopMs == null || stopMs <= startMs) return 0f
+        return ((System.currentTimeMillis() - startMs).toFloat() / (stopMs - startMs).toFloat()).coerceIn(0f, 1f)
+    }
 
-            val totalDuration = endTimeMs - startTimeMs
-            val elapsed = currentTime - startTimeMs
-            elapsed.toFloat() / totalDuration.toFloat()
-        } catch (e: Exception) {
-            0f
-        }
+    private fun showPlayerError(message: String) {
+        binding.txtPlayerError.text = message
+        binding.txtPlayerError.visibility = View.VISIBLE
+        showUiWithTimeout()
     }
 }
