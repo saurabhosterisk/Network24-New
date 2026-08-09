@@ -1,11 +1,9 @@
 package com.network24.player.features.live.activity
 
-import android.app.AlertDialog
 import android.content.Intent
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
-import android.util.Log
 import android.view.View
 import android.widget.Toast
 import androidx.core.view.GravityCompat
@@ -16,14 +14,18 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.LinearSnapHelper
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.internal.NavigationMenuView
+import com.google.firebase.firestore.FirebaseFirestore
 import com.network24.player.R
 import com.network24.player.core.base.BaseActivity
+import com.network24.player.core.database.DatabaseProvider
+import com.network24.player.core.database.repository.FavoritesRepository
 import com.network24.player.core.preferences.PreferenceManager
 import com.network24.player.databinding.ActivityLiveCategoryBinding
 import com.network24.player.features.dashboard.activity.DashboardActivity
 import com.network24.player.features.live.adapter.CategoryAdapter
 import com.network24.player.features.live.adapter.FavoriteCategoryAdapter
 import com.network24.player.features.live.models.LiveCategory
+import com.network24.player.features.live.repository.CategorySettingsRepository
 import com.network24.player.features.live.repository.LiveRepository
 import com.network24.player.features.live.repository.SyncCallback
 import com.network24.player.features.login.activity.LoginActivity
@@ -38,9 +40,12 @@ class LiveCategoryActivity : BaseActivity() {
     private lateinit var binding: ActivityLiveCategoryBinding
     private lateinit var repository: LiveRepository
     private lateinit var prefs: PreferenceManager
+    private lateinit var favRepo: FavoritesRepository
+    private lateinit var categorySettingsRepository: CategorySettingsRepository
 
     private val allCategories = mutableListOf<LiveCategory>()
     private val favoriteCategories = mutableListOf<LiveCategory>()
+    private var disabledCategoryIds: Set<String> = emptySet()
 
     private lateinit var categoryAdapter: CategoryAdapter
     private lateinit var favoriteAdapter: FavoriteCategoryAdapter
@@ -53,12 +58,22 @@ class LiveCategoryActivity : BaseActivity() {
 
         prefs = PreferenceManager(this)
         repository = LiveRepository(this)
+        favRepo = FavoritesRepository(
+            DatabaseProvider.get(this).favoritesDao(),
+            FirebaseFirestore.getInstance()
+        )
+        categorySettingsRepository = CategorySettingsRepository(FirebaseFirestore.getInstance())
 
         setupDrawerAndMenu()
         setupRecyclerViews()
         setupSearch()
 
         ensureInitialSyncThenLoad()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::categoryAdapter.isInitialized) loadCategoriesFromDB()
     }
 
     private fun ensureInitialSyncThenLoad() {
@@ -73,7 +88,7 @@ class LiveCategoryActivity : BaseActivity() {
 
                 withContext(Dispatchers.Main) {
                     if (categories.isNotEmpty()) {
-                        updateUIWithCategories(categories)
+                        loadCategoriesFromDB()
                     } else {
                         forceRefreshData(isInitialSync = true)
                     }
@@ -97,9 +112,12 @@ class LiveCategoryActivity : BaseActivity() {
                     password = prefs.getPassword(),
                     forceRefresh = false
                 )
+                val disabled = categorySettingsRepository.getDisabledCategoryIds(prefs.getUsername())
+                val favoriteIds = favRepo.getFavoriteItemIds(prefs.getUsername(), "LIVE_CATEGORY")
 
                 withContext(Dispatchers.Main) {
-                    updateUIWithCategories(categories)
+                    disabledCategoryIds = disabled
+                    updateUIWithCategories(categories, favoriteIds)
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
@@ -109,18 +127,13 @@ class LiveCategoryActivity : BaseActivity() {
         }
     }
 
-    private fun updateUIWithCategories(categories: List<LiveCategory>) {
+    private fun updateUIWithCategories(categories: List<LiveCategory>, favoriteIds: Set<String>) {
         allCategories.clear()
-        allCategories.addAll(categories)
+        allCategories.addAll(categories.filterNot { disabledCategoryIds.contains(it.category_id) })
         categoryAdapter.updateList(allCategories)
 
-        val savedFavIds = getSavedFavorites()
         favoriteCategories.clear()
-        for (category in allCategories) {
-            if (savedFavIds.contains(category.category_id.toString())) {
-                favoriteCategories.add(category)
-            }
-        }
+        favoriteCategories.addAll(allCategories.filter { favoriteIds.contains(it.category_id) })
 
         binding.txtCategoryCount.text = "${allCategories.size} Categories"
         favoriteAdapter.updateList(favoriteCategories)
@@ -180,6 +193,10 @@ class LiveCategoryActivity : BaseActivity() {
                 R.id.action_home -> {
                     startActivity(Intent(this, DashboardActivity::class.java))
                     finish()
+                    true
+                }
+                R.id.action_manage_categories -> {
+                    startActivity(Intent(this, ManageCategoriesActivity::class.java))
                     true
                 }
                 R.id.action_refresh_all -> {
@@ -297,48 +314,46 @@ class LiveCategoryActivity : BaseActivity() {
     }
 
     private fun openCategory(category: LiveCategory) {
+        if (disabledCategoryIds.contains(category.category_id)) return
         val intent = Intent(this, ChannelListActivity::class.java)
         intent.putExtra("category_id", category.category_id)
         intent.putExtra("category_name", category.category_name)
         startActivity(intent)
     }
 
-    private fun getSavedFavorites(): Set<String> {
-        val sharedPreferences = getSharedPreferences("AppPreferences", MODE_PRIVATE)
-        return sharedPreferences.getStringSet("fav_categories", emptySet()) ?: emptySet()
-    }
-
-    private fun saveFavoritesList(favIds: Set<String>) {
-        val sharedPreferences = getSharedPreferences("AppPreferences", MODE_PRIVATE)
-        sharedPreferences.edit().putStringSet("fav_categories", favIds).apply()
-    }
-
     private fun addToFavorites(category: LiveCategory) {
-        val currentFavs = getSavedFavorites().toMutableSet()
-        val catId = category.category_id.toString()
-        if (currentFavs.contains(catId)) {
-            Toast.makeText(this, "${category.category_name} already in Favorites", Toast.LENGTH_SHORT).show()
-            return
-        }
-        currentFavs.add(catId)
-        saveFavoritesList(currentFavs)
+        val userId = prefs.getUsername()
+        lifecycleScope.launch {
+            try {
+                val existing = favRepo.getFavoriteItemIds(userId, "LIVE_CATEGORY")
+                if (existing.contains(category.category_id)) {
+                    Toast.makeText(this@LiveCategoryActivity, "${category.category_name} already in Favorites", Toast.LENGTH_SHORT).show()
+                    return@launch
+                }
 
-        favoriteCategories.add(category)
-        favoriteAdapter.updateList(favoriteCategories)
-        updateFavoritesSectionVisibility()
-        Toast.makeText(this, "${category.category_name} added to Favorites", Toast.LENGTH_SHORT).show()
+                favRepo.addFavorite(userId, "LIVE_CATEGORY", category.category_id)
+                favoriteCategories.add(category)
+                favoriteAdapter.updateList(favoriteCategories)
+                updateFavoritesSectionVisibility()
+                Toast.makeText(this@LiveCategoryActivity, "${category.category_name} added to Favorites", Toast.LENGTH_SHORT).show()
+            } catch (_: Exception) {
+                Toast.makeText(this@LiveCategoryActivity, "Could not save category favorite", Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 
     private fun removeFromFavorites(category: LiveCategory) {
-        val currentFavs = getSavedFavorites().toMutableSet()
-        val catId = category.category_id.toString()
-        currentFavs.remove(catId)
-        saveFavoritesList(currentFavs)
-
-        favoriteCategories.removeAll { it.category_id.toString() == catId }
-        favoriteAdapter.updateList(favoriteCategories)
-        updateFavoritesSectionVisibility()
-        Toast.makeText(this, "${category.category_name} removed from Favorites", Toast.LENGTH_SHORT).show()
+        lifecycleScope.launch {
+            try {
+                favRepo.removeFavorite(prefs.getUsername(), "LIVE_CATEGORY", category.category_id)
+                favoriteCategories.removeAll { it.category_id == category.category_id }
+                favoriteAdapter.updateList(favoriteCategories)
+                updateFavoritesSectionVisibility()
+                Toast.makeText(this@LiveCategoryActivity, "${category.category_name} removed from Favorites", Toast.LENGTH_SHORT).show()
+            } catch (_: Exception) {
+                Toast.makeText(this@LiveCategoryActivity, "Could not update category favorite", Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 
     private fun updateFavoritesSectionVisibility() {
@@ -346,5 +361,4 @@ class LiveCategoryActivity : BaseActivity() {
         binding.favoritesSection.visibility = if (hasFav) View.VISIBLE else View.GONE
         binding.txtFavoriteCount.text = "${favoriteCategories.size} Favorites"
     }
-
 }
