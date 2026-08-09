@@ -179,10 +179,6 @@ class ChatHubActivity : BaseActivity() {
                     val doc = snap?.documents?.firstOrNull() ?: return@addSnapshotListener
                     val ts = doc.getTimestamp("ts")?.toDate()?.time ?: return@addSnapshotListener
 
-                    val latestText = doc.getString("text").orEmpty()
-                    val latestSender = doc.getString("senderName").orEmpty()
-                    roomsAdapter.setPreview(room.id, latestSender, latestText)
-
                     val lastSeen = prefs.getChatLastSeen(room.id)
                     val isSelected = (selectedRoom?.id == room.id)
                     val unread = !isSelected && ts > lastSeen
