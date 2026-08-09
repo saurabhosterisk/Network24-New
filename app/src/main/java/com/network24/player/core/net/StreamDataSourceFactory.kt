@@ -10,8 +10,11 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 
 /**
  * Single source of truth for stream HTTP/media-source configuration.
- * Normal playback and MultiView must use the same request configuration so
- * HLS playlist, variant and segment requests behave consistently.
+ * Normal playback and MultiView use the same request configuration.
+ *
+ * MultiView prefers the Media3 FFmpeg extension renderer so supported video
+ * codecs are decoded in software. Normal playback keeps the same factory
+ * entry point but is not otherwise forced to software decoding.
  */
 @OptIn(UnstableApi::class)
 object StreamDataSourceFactory {
