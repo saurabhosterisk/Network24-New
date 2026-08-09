@@ -6,15 +6,11 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <!-- MAIN CONTENT ROOT -->
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:background="@drawable/bg_dashboard">
 
-        <!-- ========================= -->
-        <!-- Header -->
-        <!-- ========================= -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/headerCard"
             android:layout_width="0dp"
@@ -28,12 +24,9 @@
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent">
-
             <androidx.constraintlayout.widget.ConstraintLayout
                 android:layout_width="match_parent"
                 android:layout_height="match_parent">
-
-                <!-- Back Button -->
                 <ImageButton
                     android:id="@+id/btnBack"
                     android:layout_width="40dp"
@@ -45,8 +38,6 @@
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toTopOf="parent"
                     app:layout_constraintBottom_toBottomOf="parent"/>
-
-                <!-- Category Title -->
                 <TextView
                     android:id="@+id/txtCategoryName"
                     android:layout_width="0dp"
@@ -61,8 +52,6 @@
                     app:layout_constraintEnd_toStartOf="@id/searchLayout"
                     app:layout_constraintTop_toTopOf="parent"
                     app:layout_constraintBottom_toBottomOf="parent"/>
-
-                <!-- Search Box -->
                 <com.google.android.material.textfield.TextInputLayout
                     android:id="@+id/searchLayout"
                     style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
@@ -78,7 +67,6 @@
                     app:layout_constraintEnd_toStartOf="@id/btnMore"
                     app:layout_constraintTop_toTopOf="parent"
                     app:layout_constraintBottom_toBottomOf="parent">
-
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/edtSearch"
                         android:layout_width="match_parent"
@@ -91,8 +79,6 @@
                         android:inputType="text"
                         android:imeOptions="actionSearch|flagNoExtractUi"/>
                 </com.google.android.material.textfield.TextInputLayout>
-
-                <!-- 3-dots Menu Button -->
                 <ImageView
                     android:id="@+id/btnMore"
                     android:layout_width="40dp"
@@ -108,30 +94,22 @@
                     app:layout_constraintEnd_toEndOf="parent"
                     app:layout_constraintTop_toTopOf="parent"
                     app:layout_constraintBottom_toBottomOf="parent"/>
-
             </androidx.constraintlayout.widget.ConstraintLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- ========================= -->
-        <!-- Guidelines -->
-        <!-- ========================= -->
         <androidx.constraintlayout.widget.Guideline
             android:id="@+id/guideVertical"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:orientation="vertical"
             app:layout_constraintGuide_percent="0.35"/>
-
         <androidx.constraintlayout.widget.Guideline
             android:id="@+id/guideHorizontal"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            app:layout_constraintGuide_percent="0.80"/>
+            app:layout_constraintGuide_percent="0.68"/>
 
-        <!-- ========================= -->
-        <!-- Left Panel (Channel List) -->
-        <!-- ========================= -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/cardChannels"
             android:layout_width="0dp"
@@ -147,7 +125,6 @@
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toStartOf="@id/guideVertical">
-
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/rvChannels"
                 android:layout_width="match_parent"
@@ -158,9 +135,6 @@
                 android:padding="8dp"/>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- ========================= -->
-        <!-- Player Card -->
-        <!-- ========================= -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/cardPlayer"
             android:layout_width="0dp"
@@ -176,11 +150,9 @@
             app:layout_constraintBottom_toTopOf="@id/guideHorizontal"
             app:layout_constraintStart_toStartOf="@id/guideVertical"
             app:layout_constraintEnd_toEndOf="parent">
-
             <androidx.constraintlayout.widget.ConstraintLayout
                 android:layout_width="match_parent"
                 android:layout_height="match_parent">
-
                 <androidx.media3.ui.PlayerView
                     android:id="@+id/playerView"
                     android:layout_width="0dp"
@@ -193,8 +165,6 @@
                     app:layout_constraintBottom_toBottomOf="parent"
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintEnd_toEndOf="parent"/>
-
-                <!-- 🔥 Ye naya Error TextView hai jo Center me aayega -->
                 <TextView
                     android:id="@+id/txtPlayerError"
                     android:layout_width="wrap_content"
@@ -211,7 +181,6 @@
                     android:background="#99000000"
                     android:padding="12dp"
                     android:visibility="gone" />
-
                 <Button
                     android:id="@+id/btnReportChannel"
                     android:layout_width="wrap_content"
@@ -224,7 +193,6 @@
                     app:layout_constraintEnd_toEndOf="parent"
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toBottomOf="@id/txtPlayerError" />
-
                 <ProgressBar
                     android:id="@+id/progressLoading"
                     android:layout_width="50dp"
@@ -234,7 +202,6 @@
                     app:layout_constraintBottom_toBottomOf="parent"
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintEnd_toEndOf="parent"/>
-
                 <ImageButton
                     android:id="@+id/btnFullscreen"
                     android:layout_width="40dp"
@@ -247,7 +214,6 @@
                     android:visibility="gone"
                     app:layout_constraintTop_toTopOf="parent"
                     app:layout_constraintEnd_toEndOf="parent"/>
-
                 <LinearLayout
                     android:id="@+id/layoutOverlay"
                     android:layout_width="wrap_content"
@@ -256,7 +222,6 @@
                     android:orientation="vertical"
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintBottom_toBottomOf="parent">
-
                     <TextView
                         android:id="@+id/txtOverlayChannel"
                         android:layout_width="wrap_content"
@@ -265,7 +230,6 @@
                         android:textColor="@android:color/white"
                         android:textStyle="bold"
                         android:textSize="18sp"/>
-
                     <TextView
                         android:id="@+id/txtOverlayProgram"
                         android:layout_width="wrap_content"
@@ -278,9 +242,6 @@
             </androidx.constraintlayout.widget.ConstraintLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- ========================= -->
-        <!-- EPG Card -->
-        <!-- ========================= -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/cardEpg"
             android:layout_width="0dp"
@@ -296,99 +257,99 @@
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintStart_toStartOf="@id/guideVertical"
             app:layout_constraintEnd_toEndOf="parent">
-
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:orientation="vertical"
-                android:gravity="center_vertical"
-                android:padding="12dp">
-
+                android:padding="18dp">
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="TV GUIDE"
+                    android:textColor="#64B5F6"
+                    android:textStyle="bold"
+                    android:textSize="14sp" />
                 <LinearLayout
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
+                    android:layout_height="0dp"
+                    android:layout_weight="1"
+                    android:layout_marginTop="8dp"
                     android:orientation="horizontal">
-
-                    <!-- NOW -->
                     <LinearLayout
                         android:layout_width="0dp"
-                        android:layout_height="wrap_content"
+                        android:layout_height="match_parent"
                         android:layout_weight="1"
                         android:orientation="vertical">
-
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="NOW"
                             android:textColor="#64B5F6"
                             android:textStyle="bold"
-                            android:textSize="10sp" />
-
+                            android:textSize="14sp" />
                         <TextView
                             android:id="@+id/txtNowTitle"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="1dp"
+                            android:layout_marginTop="5dp"
                             android:ellipsize="end"
-                            android:maxLines="1"
+                            android:maxLines="2"
                             android:text="The First 48"
                             android:textColor="@android:color/white"
                             android:textStyle="bold"
-                            android:textSize="13sp" />
-
+                            android:textSize="18sp" />
                         <TextView
                             android:id="@+id/txtNowTime"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
+                            android:layout_marginTop="5dp"
                             android:text="08:00 PM - 09:00 PM"
-                            android:textColor="#9E9E9E"
-                            android:textSize="10sp" />
+                            android:textColor="#BDBDBD"
+                            android:textSize="13sp" />
                     </LinearLayout>
-
-                    <!-- NEXT -->
+                    <View
+                        android:layout_width="1dp"
+                        android:layout_height="match_parent"
+                        android:layout_marginStart="18dp"
+                        android:layout_marginEnd="18dp"
+                        android:background="#33FFFFFF" />
                     <LinearLayout
                         android:layout_width="0dp"
-                        android:layout_height="wrap_content"
+                        android:layout_height="match_parent"
                         android:layout_weight="1"
-                        android:layout_marginStart="12dp"
                         android:orientation="vertical">
-
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="NEXT"
                             android:textColor="#81C784"
                             android:textStyle="bold"
-                            android:textSize="10sp" />
-
+                            android:textSize="14sp" />
                         <TextView
                             android:id="@+id/txtNextTitle"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="1dp"
+                            android:layout_marginTop="5dp"
                             android:ellipsize="end"
-                            android:maxLines="1"
+                            android:maxLines="2"
                             android:text="Court Cam"
                             android:textColor="@android:color/white"
                             android:textStyle="bold"
-                            android:textSize="13sp" />
-
+                            android:textSize="18sp" />
                         <TextView
                             android:id="@+id/txtNextTime"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
+                            android:layout_marginTop="5dp"
                             android:text="09:00 PM - 10:00 PM"
-                            android:textColor="#9E9E9E"
-                            android:textSize="10sp" />
+                            android:textColor="#BDBDBD"
+                            android:textSize="13sp" />
                     </LinearLayout>
                 </LinearLayout>
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
     </androidx.constraintlayout.widget.ConstraintLayout>
 
-    <!-- ========================= -->
-    <!-- Right Side Menu Drawer -->
-    <!-- ========================= -->
     <com.google.android.material.navigation.NavigationView
         android:id="@+id/rightNav"
         android:layout_width="340dp"
