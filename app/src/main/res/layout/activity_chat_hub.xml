@@ -19,7 +19,6 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"/>
 
-    <!-- Rooms strip (mobile) -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rvRooms"
         android:layout_width="0dp"
@@ -60,34 +59,74 @@
         android:id="@+id/bottomBar"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
+        android:orientation="vertical"
         android:paddingTop="8dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <EditText
-            android:id="@+id/etMessage"
-            android:layout_width="0dp"
-            android:layout_height="48dp"
-            android:layout_weight="1"
-            android:hint="Type a message"
-            android:textColor="#FFFFFF"
+        <LinearLayout
+            android:id="@+id/replyBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingStart="10dp"
+            android:paddingEnd="6dp"
+            android:paddingTop="5dp"
+            android:paddingBottom="5dp"
             android:background="#151B2C"
-            android:paddingStart="12dp"
-            android:paddingEnd="12dp"
-            android:inputType="textCapSentences|textMultiLine"
-            android:maxLines="3" />
+            android:visibility="gone">
 
-        <Button
-            android:id="@+id/btnSend"
-            android:layout_width="wrap_content"
-            android:layout_height="48dp"
-            android:layout_marginStart="10dp"
-            android:text="SEND"
-            android:focusable="true"/>
+            <TextView
+                android:id="@+id/tvReplyPreview"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="↩ Replying to John\nOriginal message"
+                android:textColor="#AFC7EA"
+                android:textSize="11sp"
+                android:maxLines="2"
+                android:ellipsize="end" />
 
+            <Button
+                android:id="@+id/btnCancelReply"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:text="×"
+                android:textSize="18sp"
+                android:minWidth="44dp"
+                android:padding="0dp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingTop="6dp">
+
+            <EditText
+                android:id="@+id/etMessage"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
+                android:hint="Type a message (use @username to mention)"
+                android:textColor="#FFFFFF"
+                android:background="#151B2C"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp"
+                android:inputType="textCapSentences|textMultiLine"
+                android:maxLines="3" />
+
+            <Button
+                android:id="@+id/btnSend"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:layout_marginStart="10dp"
+                android:text="SEND"
+                android:focusable="true"/>
+        </LinearLayout>
     </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>
