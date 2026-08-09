@@ -7,12 +7,14 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
+import com.network24.player.core.net.CountingDataSource
 
 @OptIn(UnstableApi::class)
 class MultiPlayerManager(
@@ -37,19 +39,27 @@ class MultiPlayerManager(
     }
 
     private fun createPlayer(slot: Int): ExoPlayer {
-        // IMPORTANT: every ExoPlayer gets its own LoadControl instance.
-        // Media3 requires a LoadControl to belong to a single playback thread.
-        // Sharing one LoadControl between four players causes the second player
-        // to fail when it is attached/started.
+        // Each MultiView player has its own LoadControl and ExoPlayer instance.
+        // Only the playback instance is separate; the HTTP configuration is kept
+        // identical to the normal PlayerManager because the XC server validates it.
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(3000, 12000, 500, 1000)
             .build()
 
-        // The XC server requires the exact same User-Agent as the normal player.
+        // Keep this configuration exactly aligned with PlayerManager.
+        // In particular, the XC server requires the exact N24PlayerPlayer UA.
         val httpFactory = DefaultHttpDataSource.Factory()
             .setUserAgent("N24PlayerPlayer")
             .setAllowCrossProtocolRedirects(true)
-        val mediaSourceFactory = DefaultMediaSourceFactory(httpFactory)
+
+        // Use the same CountingDataSource wrapper as the normal player. It does
+        // not change HTTP headers, but keeping the same DataSource chain avoids
+        // having two subtly different networking paths in the app.
+        val countingFactory = DataSource.Factory {
+            CountingDataSource(httpFactory.createDataSource())
+        }
+
+        val mediaSourceFactory = DefaultMediaSourceFactory(countingFactory)
         val renderersFactory = DefaultRenderersFactory(context.applicationContext)
             .setEnableDecoderFallback(true)
             .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
@@ -77,6 +87,14 @@ class MultiPlayerManager(
 
                     override fun onPlayerError(error: PlaybackException) {
                         val cause = error.cause?.message ?: error.message ?: "Playback error"
+                        val code = error.errorCodeName
+                        val http403 = cause.contains("403", true) || code.contains("HTTP", true) && cause.contains("403", true)
+                        val message = if (http403) {
+                            "HTTP 403 (server rejected MultiView request)"
+                        } else {
+                            "$code: ${cause.take(100)}"
+                        }
+
                         val decoderError = cause.contains("decoder", true) ||
                             cause.contains("codec", true) ||
                             cause.contains("MediaCodec", true) ||
@@ -93,7 +111,7 @@ class MultiPlayerManager(
                             playWhenReady = true
                             play()
                         } else {
-                            listener?.onError(slot, cause.take(120))
+                            listener?.onError(slot, message)
                         }
                     }
                 })
