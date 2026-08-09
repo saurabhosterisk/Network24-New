@@ -9,7 +9,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
-import com.network24.player.R // <-- FIX: R import added
+import com.network24.player.R
 import com.network24.player.core.base.BaseActivity
 import com.network24.player.core.preferences.PreferenceManager
 import com.network24.player.databinding.ActivityChatHubBinding
@@ -43,7 +43,6 @@ class ChatHubActivity : BaseActivity() {
         val deviceId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID) ?: "device"
         senderId = senderName.lowercase().replace(" ", "_") + "_" + deviceId.takeLast(6)
 
-        // Rooms Initialization
         roomsAdapter = ChatRoomsAdapter { room -> selectRoom(room) }
         binding.rvRooms.layoutManager = LinearLayoutManager(this)
         binding.rvRooms.adapter = roomsAdapter
@@ -51,7 +50,6 @@ class ChatHubActivity : BaseActivity() {
         val rooms = defaultRooms()
         roomsAdapter.submit(rooms)
 
-        // Messages Initialization
         messagesAdapter = ChatMessagesAdapter(mySenderId = senderId)
         val lm = LinearLayoutManager(this).apply { stackFromEnd = true }
         binding.rvMessages.layoutManager = lm
@@ -59,21 +57,16 @@ class ChatHubActivity : BaseActivity() {
 
         binding.btnSend.setOnClickListener { sendCurrent() }
 
-        // Start unread watchers
         startRoomUnreadWatchers(rooms)
 
-        // Restore last selected room
         val lastId = prefs.getLastChatRoomId()
         val initial = rooms.firstOrNull { it.id == lastId } ?: rooms.first()
         selectRoom(initial)
 
-        // --- EXPLICIT FOCUS COMMANDS ---
-        // Android TV ko strictly batana ki kahan jana hai
         binding.rvMessages.nextFocusDownId = binding.etMessage.id
         binding.etMessage.nextFocusUpId = binding.rvMessages.id
         binding.btnSend.nextFocusUpId = binding.rvMessages.id
 
-        // Activity khulte hi focus ko sahi room par bhejna
         val initialIndex = roomsAdapter.getPositionOf(initial.id)
         if (initialIndex != -1) {
             binding.rvRooms.post {
@@ -98,7 +91,6 @@ class ChatHubActivity : BaseActivity() {
         binding.etMessage.isEnabled = canSend
         binding.etMessage.hint = if (canSend) "Type a message" else "Read-only channel"
 
-        // NAYA LOGIC: Agar send kar sakte hain toh dikhao, warna gayab (GONE) kar do
         if (canSend) {
             binding.etMessage.visibility = View.VISIBLE
             binding.btnSend.visibility = View.VISIBLE
@@ -187,6 +179,10 @@ class ChatHubActivity : BaseActivity() {
                     val doc = snap?.documents?.firstOrNull() ?: return@addSnapshotListener
                     val ts = doc.getTimestamp("ts")?.toDate()?.time ?: return@addSnapshotListener
 
+                    val latestText = doc.getString("text").orEmpty()
+                    val latestSender = doc.getString("senderName").orEmpty()
+                    roomsAdapter.setPreview(room.id, latestSender, latestText)
+
                     val lastSeen = prefs.getChatLastSeen(room.id)
                     val isSelected = (selectedRoom?.id == room.id)
                     val unread = !isSelected && ts > lastSeen
@@ -198,40 +194,25 @@ class ChatHubActivity : BaseActivity() {
 
     private fun defaultRooms(): List<ChatRoom> {
         return listOf(
-            // Admin only channels (readOnly = true)
             ChatRoom("announcements", "Announcements", "📢", 1, readOnly = true),
             ChatRoom("pinned_posts", "Pinned Posts", "📌", 2, readOnly = true),
-
-            // Support & Feedback (Open for users)
             ChatRoom("channel_down", "Channel Down", "🚨", 3, readOnly = true),
             ChatRoom("buffering_issues", "Buffering Issues", "⏳", 4, readOnly = false),
             ChatRoom("questions_and_help", "Questions & Help", "❓", 5, readOnly = false),
             ChatRoom("channel_requests", "Channel Requests", "📡", 6, readOnly = false),
-
-            // Community (Open for users)
             ChatRoom("general_discussions", "General Discussions", "💬", 7, readOnly = false),
             ChatRoom("live_events", "Live Events", "🏆", 8, readOnly = true),
-
-            // Dev/Behind the scenes (Open for users or change readOnly=true based on your need)
             ChatRoom("development_desk", "Development Desk", "💻", 9, readOnly = false)
         ).sortedBy { it.order }
     }
 
-
-    // --- MASTER TV FOCUS CONTROLLER (STRICT FOCUS TRAP) ---
-
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.action == KeyEvent.ACTION_DOWN) {
-
-            // NAYA CHECK: Ab hum visibility check kar rahe hain
             val isReadOnly = binding.etMessage.visibility == View.GONE
-
             val inRightPane = binding.rvMessages.hasFocus() || binding.etMessage.hasFocus() || binding.btnSend.hasFocus()
             when (event.keyCode) {
-                // 1. RIGHT Button
                 KeyEvent.KEYCODE_DPAD_RIGHT -> {
                     if (binding.rvRooms.hasFocus()) {
-                        // Room se Messages par jao
                         if (messagesAdapter.itemCount > 0) {
                             focusLastVisibleMessage()
                         } else if (!isReadOnly) {
@@ -243,90 +224,60 @@ class ChatHubActivity : BaseActivity() {
                         binding.btnSend.requestFocus()
                         return true
                     }
-                    if (binding.btnSend.hasFocus()) {
-                        return true // TRAP: Send button se aage (right) kuch nahi hai, wahi ruko
-                    }
+                    if (binding.btnSend.hasFocus()) return true
                 }
-
-                // 2. LEFT Button
                 KeyEvent.KEYCODE_DPAD_LEFT -> {
                     if (binding.btnSend.hasFocus()) {
-                        binding.etMessage.requestFocus() // Send se TextBox par aao
+                        binding.etMessage.requestFocus()
                         return true
                     }
                     if (inRightPane) {
-                        restoreRoomFocus() // TextBox ya Messages se sidha Room par wapas aao
+                        restoreRoomFocus()
                         return true
                     }
                 }
-
-                // 3. DOWN Button
                 KeyEvent.KEYCODE_DPAD_DOWN -> {
                     if (inRightPane) {
-                        // Agar TextBox ya Send Button par hain, toh aur niche mat jao (TRAP FOCUS)
-                        if (binding.etMessage.hasFocus() || binding.btnSend.hasFocus()) {
-                            return true
-                        }
-
+                        if (binding.etMessage.hasFocus() || binding.btnSend.hasFocus()) return true
                         if (binding.rvMessages.hasFocus()) {
                             val focusedView = binding.rvMessages.focusedChild
                             if (focusedView != null) {
                                 val pos = binding.rvMessages.getChildAdapterPosition(focusedView)
                                 val tvText = focusedView.findViewById<android.widget.TextView>(R.id.tvText)
-
-                                // Lamba text andar se scroll karna
                                 if (tvText != null && tvText.hasFocus() && tvText.canScrollVertically(1)) {
                                     return super.dispatchKeyEvent(event)
                                 }
-
-                                // Agar hum last message par hain
                                 if (pos == messagesAdapter.itemCount - 1) {
-                                    if (!isReadOnly) {
-                                        binding.etMessage.requestFocus() // 100% TextBox par bhej do
-                                    }
-                                    return true // Uske aage badhne mat do
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // 4. UP Button
-                KeyEvent.KEYCODE_DPAD_UP -> {
-                    if (inRightPane) {
-                        // TextBox ya Send button par hain toh wapas Messages par jao
-                        if (binding.etMessage.hasFocus() || binding.btnSend.hasFocus()) {
-                            focusLastVisibleMessage()
-                            return true
-                        }
-
-                        if (binding.rvMessages.hasFocus()) {
-                            val focusedView = binding.rvMessages.focusedChild
-                            if (focusedView != null) {
-                                val pos = binding.rvMessages.getChildAdapterPosition(focusedView)
-                                val tvText = focusedView.findViewById<android.widget.TextView>(R.id.tvText)
-
-                                // Lamba text andar se upar scroll karna
-                                if (tvText != null && tvText.hasFocus() && tvText.canScrollVertically(-1)) {
-                                    return super.dispatchKeyEvent(event)
-                                }
-
-                                // Agar sabse pehle message (Top) par hain, toh focus ko wahi lock kardo (TRAP)
-                                // Ye focus ko header ya rooms par jump hone se rokega
-                                if (pos == 0) {
+                                    if (!isReadOnly) binding.etMessage.requestFocus()
                                     return true
                                 }
                             }
                         }
                     }
                 }
+                KeyEvent.KEYCODE_DPAD_UP -> {
+                    if (inRightPane) {
+                        if (binding.etMessage.hasFocus() || binding.btnSend.hasFocus()) {
+                            focusLastVisibleMessage()
+                            return true
+                        }
+                        if (binding.rvMessages.hasFocus()) {
+                            val focusedView = binding.rvMessages.focusedChild
+                            if (focusedView != null) {
+                                val pos = binding.rvMessages.getChildAdapterPosition(focusedView)
+                                val tvText = focusedView.findViewById<android.widget.TextView>(R.id.tvText)
+                                if (tvText != null && tvText.hasFocus() && tvText.canScrollVertically(-1)) {
+                                    return super.dispatchKeyEvent(event)
+                                }
+                                if (pos == 0) return true
+                            }
+                        }
+                    }
+                }
             }
         }
-
         return super.dispatchKeyEvent(event)
     }
-
-    // --- HELPER FUNCTIONS ---
 
     private fun focusLastVisibleMessage() {
         if (messagesAdapter.itemCount == 0) return
@@ -334,7 +285,6 @@ class ChatHubActivity : BaseActivity() {
         val targetPos = lm.findLastVisibleItemPosition()
         if (targetPos != -1) {
             val targetView = lm.findViewByPosition(targetPos)
-            // Koshish karo ki text ke andar focus jaye (taaki scroll ho sake), warna pure bubble par
             targetView?.findViewById<View>(R.id.tvText)?.requestFocus() ?: targetView?.requestFocus()
         }
     }
