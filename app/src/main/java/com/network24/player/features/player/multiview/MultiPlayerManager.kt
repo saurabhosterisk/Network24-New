@@ -29,10 +29,6 @@ class MultiPlayerManager(
     private val urls = arrayOfNulls<String>(4)
     private val reducedProfile = BooleanArray(4)
 
-    private val loadControl = DefaultLoadControl.Builder()
-        .setBufferDurationsMs(3000, 12000, 500, 1000)
-        .build()
-
     fun attach(slot: Int, playerView: PlayerView) {
         require(slot in 0..3)
         val player = players[slot] ?: createPlayer(slot).also { players[slot] = it }
@@ -41,8 +37,15 @@ class MultiPlayerManager(
     }
 
     private fun createPlayer(slot: Int): ExoPlayer {
+        // IMPORTANT: every ExoPlayer gets its own LoadControl instance.
+        // Media3 requires a LoadControl to belong to a single playback thread.
+        // Sharing one LoadControl between four players causes the second player
+        // to fail when it is attached/started.
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(3000, 12000, 500, 1000)
+            .build()
+
         // The XC server requires the exact same User-Agent as the normal player.
-        // Do not change this to a MultiView-specific User-Agent.
         val httpFactory = DefaultHttpDataSource.Factory()
             .setUserAgent("N24PlayerPlayer")
             .setAllowCrossProtocolRedirects(true)
