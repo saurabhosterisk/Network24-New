@@ -86,6 +86,9 @@ dependencies {
     implementation(libs.coil)
     implementation(libs.glide)
 
+    // Runtime QR code generation for the renewal payment dialog.
+    implementation("com.google.zxing:core:3.5.3")
+
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.firestore.ktx)
 
