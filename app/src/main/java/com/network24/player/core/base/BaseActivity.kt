@@ -23,13 +23,11 @@ import com.google.android.material.navigation.NavigationView
 import com.network24.player.R
 import com.network24.player.core.sync.SyncManager
 import com.network24.player.core.sync.SyncResult
+import com.network24.player.features.live.activity.ManageCategoriesActivity
 import kotlinx.coroutines.launch
 
 open class BaseActivity : AppCompatActivity() {
 
-    // ----------------------------
-    // Fullscreen Management
-    // ----------------------------
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableFullscreen()
@@ -54,9 +52,6 @@ open class BaseActivity : AppCompatActivity() {
         super.onDestroy()
     }
 
-    // ----------------------------
-    // Optional Right Drawer Helpers
-    // ----------------------------
     protected fun setupOptionalRightDrawerMenu(
         drawerLayout: DrawerLayout?,
         navView: NavigationView?,
@@ -65,7 +60,12 @@ open class BaseActivity : AppCompatActivity() {
         if (drawerLayout == null || navView == null) return
         navView.setNavigationItemSelectedListener { item ->
             drawerLayout.closeDrawer(GravityCompat.END)
-            onMenuClick(item.itemId)
+            if (item.itemId == R.id.action_manage_categories) {
+                startActivity(Intent(this, ManageCategoriesActivity::class.java))
+                true
+            } else {
+                onMenuClick(item.itemId)
+            }
         }
     }
 
@@ -77,12 +77,6 @@ open class BaseActivity : AppCompatActivity() {
         drawerLayout?.closeDrawer(GravityCompat.END)
     }
 
-
-    /**
-     * Handles the Android back action for screens that use the optional
-     * right-side drawer. If the drawer is open it is closed first; otherwise
-     * the normal activity back action is dispatched.
-     */
     protected fun registerDrawerBackHandler(drawerLayout: DrawerLayout) {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -97,9 +91,6 @@ open class BaseActivity : AppCompatActivity() {
         })
     }
 
-    // ----------------------------
-    // Common Loader Dialog
-    // ----------------------------
     private var loadingDialog: AlertDialog? = null
 
     protected fun showLoader(message: String = "Loading...") {
@@ -123,13 +114,9 @@ open class BaseActivity : AppCompatActivity() {
         }
     }
 
-    // ----------------------------
-    // EPG Update Broadcast Helpers
-    // ----------------------------
     protected val ACTION_EPG_UPDATED: String = "ACTION_EPG_UPDATED"
     private var epgReceiver: BroadcastReceiver? = null
 
-    /** Call in onResume() where you want to auto-refresh EPG UI */
     protected fun registerEpgRefresh(onUpdated: () -> Unit) {
         if (epgReceiver != null) return
         epgReceiver = object : BroadcastReceiver() {
@@ -137,8 +124,6 @@ open class BaseActivity : AppCompatActivity() {
                 if (intent?.action == ACTION_EPG_UPDATED) onUpdated()
             }
         }
-
-        // ✅ FIX: Android 14+ Requires RECEIVER_NOT_EXPORTED flag
         ContextCompat.registerReceiver(
             this,
             epgReceiver,
@@ -147,20 +132,14 @@ open class BaseActivity : AppCompatActivity() {
         )
     }
 
-    /** Call in onPause() */
     protected fun unregisterEpgRefresh() {
         try {
             if (epgReceiver != null) unregisterReceiver(epgReceiver)
         } catch (_: Exception) {
-            // Ignore if already unregistered
         } finally {
             epgReceiver = null
         }
     }
-
-    // ----------------------------
-    // Sync Helpers
-    // ----------------------------
 
     protected fun runCallbackSyncWithLoader(
         loadingMessage: String = "Please wait…",
@@ -195,7 +174,6 @@ open class BaseActivity : AppCompatActivity() {
             when (result) {
                 is SyncResult.Success -> {
                     Toast.makeText(this@BaseActivity, "TV Guide Updated", Toast.LENGTH_SHORT).show()
-                    // Send local broadcast to update UI safely
                     sendBroadcast(Intent(ACTION_EPG_UPDATED))
                 }
                 is SyncResult.Error -> {
