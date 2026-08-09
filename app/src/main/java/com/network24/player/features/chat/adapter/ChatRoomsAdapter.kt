@@ -16,7 +16,6 @@ class ChatRoomsAdapter(
 
     private val items = mutableListOf<ChatRoom>()
     private val unread = mutableSetOf<String>()
-    private val previews = mutableMapOf<String, String>()
     private var selectedRoomId: String? = null
 
     fun setSelectedRoom(roomId: String) {
@@ -47,22 +46,6 @@ class ChatRoomsAdapter(
         if (index != -1) notifyItemChanged(index)
     }
 
-    fun setPreview(roomId: String, senderName: String, text: String) {
-        val preview = if (text.isBlank()) {
-            ""
-        } else if (senderName.isBlank()) {
-            text.trim()
-        } else {
-            "${senderName.trim()}: ${text.trim()}"
-        }
-
-        if (previews[roomId] == preview) return
-        previews[roomId] = preview
-
-        val index = items.indexOfFirst { it.id == roomId }
-        if (index != -1) notifyItemChanged(index)
-    }
-
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
         val v = LayoutInflater.from(parent.context)
             .inflate(R.layout.item_chat_room, parent, false)
@@ -74,8 +57,7 @@ class ChatRoomsAdapter(
         holder.bind(
             room = room,
             isUnread = unread.contains(room.id),
-            isSelected = room.id == selectedRoomId,
-            preview = previews[room.id]
+            isSelected = room.id == selectedRoomId
         )
     }
 
@@ -88,30 +70,25 @@ class ChatRoomsAdapter(
 
         private val tvEmoji: TextView = itemView.findViewById(R.id.tvEmoji)
         private val tvRoomName: TextView = itemView.findViewById(R.id.tvRoomName)
-        private val tvLastMessage: TextView = itemView.findViewById(R.id.tvLastMessage)
         private val tvReadOnly: TextView = itemView.findViewById(R.id.tvReadOnly)
         private val badgeUnreadNew: TextView = itemView.findViewById(R.id.badgeUnreadNew)
 
         fun bind(
             room: ChatRoom,
             isUnread: Boolean,
-            isSelected: Boolean,
-            preview: String?
+            isSelected: Boolean
         ) {
             tvEmoji.text = room.emoji
             tvRoomName.text = room.name
-            tvLastMessage.text = preview?.takeIf { it.isNotBlank() } ?: "No messages yet"
             tvReadOnly.visibility = if (room.readOnly) View.VISIBLE else View.GONE
 
             if (isUnread) {
                 tvRoomName.setTypeface(null, Typeface.BOLD)
                 tvRoomName.setTextColor(Color.WHITE)
-                tvLastMessage.setTextColor(Color.parseColor("#DDE6F5"))
                 badgeUnreadNew.visibility = View.VISIBLE
             } else {
                 tvRoomName.setTypeface(null, if (isSelected) Typeface.BOLD else Typeface.NORMAL)
                 tvRoomName.setTextColor(if (isSelected) Color.WHITE else Color.parseColor("#B0BEC5"))
-                tvLastMessage.setTextColor(Color.parseColor("#7F8A9A"))
                 badgeUnreadNew.visibility = View.GONE
             }
 
