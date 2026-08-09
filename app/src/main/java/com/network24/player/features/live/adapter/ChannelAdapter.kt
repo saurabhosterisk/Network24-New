@@ -67,13 +67,9 @@ class ChannelAdapter(
         //------------------------------------
         // 🔥 Favorite Heart Icon Logic
         //------------------------------------
-        // XML mein aapke heart icon ka id (e.g., imgFavorite ya ivFavHeart) use karein
         val isFavorite = favoriteIds.contains(channel.stream_id.toString())
-        if (isFavorite) {
-            holder.binding.imgFavorite.visibility = View.VISIBLE
-        } else {
-            holder.binding.imgFavorite.visibility = View.GONE
-        }
+        holder.binding.imgFavorite.visibility =
+            if (isFavorite) View.VISIBLE else View.GONE
 
         //------------------------------------
         // Focus Indicator
@@ -117,11 +113,21 @@ class ChannelAdapter(
         notifyDataSetChanged()
     }
 
-    // 🔥 NAYA: Favorites list update karne ke liye
-    @SuppressLint("NotifyDataSetChanged")
+    // Update only the channel rows whose favorite state actually changed.
+    // Do not call notifyDataSetChanged() here: doing so can cause RecyclerView
+    // on Fire TV/Fire Stick to lose its current DPAD focus and return to the top.
     fun updateFavorites(newFavIds: Set<String>) {
-        this.favoriteIds = newFavIds
-        notifyDataSetChanged()
+        val oldFavIds = favoriteIds
+        favoriteIds = newFavIds
+
+        for (index in channels.indices) {
+            val streamId = channels[index].stream_id?.toString() ?: continue
+            val wasFavorite = oldFavIds.contains(streamId)
+            val isFavorite = newFavIds.contains(streamId)
+            if (wasFavorite != isFavorite) {
+                notifyItemChanged(index)
+            }
+        }
     }
 
     fun setPlaying(
@@ -131,6 +137,7 @@ class ChannelAdapter(
         playingPosition = position
         if (old != RecyclerView.NO_POSITION)
             notifyItemChanged(old)
-        notifyItemChanged(position)
+        if (position != RecyclerView.NO_POSITION)
+            notifyItemChanged(position)
     }
 }
