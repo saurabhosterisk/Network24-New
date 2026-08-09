@@ -1,6 +1,5 @@
 package com.network24.player.core.database.repository
 
-
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
@@ -15,14 +14,26 @@ class FavoritesRepository(
     private fun doc(userId: String) =
         firestore.collection("user_favorites").document(userId)
 
+    suspend fun getFavoriteItemIds(userId: String, type: String): Set<String> {
+        return try {
+            val snapshot = doc(userId).get().await()
+            val keys = snapshot.get("items") as? List<*> ?: emptyList<Any>()
+            keys.mapNotNull { key ->
+                val value = key?.toString() ?: return@mapNotNull null
+                val parts = value.split(":", limit = 2)
+                if (parts.getOrNull(0) == type) parts.getOrNull(1) else null
+            }.toSet()
+        } catch (_: Exception) {
+            emptySet()
+        }
+    }
+
     suspend fun syncFromCloud(userId: String) {
         try {
             val snapshot = doc(userId).get().await()
             if (!snapshot.exists()) return
 
             val keys = snapshot.get("items") as? List<String> ?: emptyList()
-
-            // local me add (duplicates REPLACE se handle ho jayenge)
             keys.forEach { key ->
                 val parts = key.split(":", limit = 2)
                 val type = parts.getOrNull(0) ?: return@forEach
@@ -45,7 +56,6 @@ class FavoritesRepository(
     suspend fun addFavorite(userId: String, type: String, itemId: String) {
         val key = "$type:$itemId"
 
-        // 1) Room
         favoritesDao.upsert(
             FavoriteEntity(
                 key = key,
@@ -55,7 +65,6 @@ class FavoritesRepository(
             )
         )
 
-        // 2) Firestore
         val data = mapOf(
             "items" to FieldValue.arrayUnion(key),
             "updatedAtMs" to System.currentTimeMillis()
@@ -66,10 +75,8 @@ class FavoritesRepository(
     suspend fun removeFavorite(userId: String, type: String, itemId: String) {
         val key = "$type:$itemId"
 
-        // 1) Room
         favoritesDao.deleteByKey(key)
 
-        // 2) Firestore
         try {
             doc(userId).update(
                 mapOf(
