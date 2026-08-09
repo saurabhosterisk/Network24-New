@@ -24,8 +24,15 @@ object PlayerManager {
     private var lastError: PlaybackException? = null
     private var lastPlaybackState = Player.STATE_IDLE
 
+    // Tuned for live HLS/Xtream playback: enough headroom for short network
+    // fluctuations without creating excessive startup delay or data usage.
     private val loadControl = DefaultLoadControl.Builder()
-        .setBufferDurationsMs(15000, 50000, 1000, 2000)
+        .setBufferDurationsMs(
+            20_000, // minBufferMs
+            60_000, // maxBufferMs
+            3_000,  // bufferForPlaybackMs
+            6_000   // bufferForPlaybackAfterRebufferMs
+        )
         .build()
 
     fun getPlayer(context: Context): ExoPlayer {
