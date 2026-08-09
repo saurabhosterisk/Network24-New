@@ -82,6 +82,7 @@ dependencies {
     implementation(libs.media3.ui)
     implementation(libs.media3.common)
     implementation(libs.media3.exoplayer.hls)
+    implementation(libs.media3.decoder.ffmpeg)
 
     implementation(libs.coil)
     implementation(libs.glide)
