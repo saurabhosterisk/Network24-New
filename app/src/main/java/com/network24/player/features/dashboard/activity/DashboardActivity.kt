@@ -19,7 +19,6 @@ import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import androidx.core.view.GravityCompat
 import androidx.drawerlayout.widget.DrawerLayout
 import com.google.android.material.internal.NavigationMenuView
 import com.network24.player.R
@@ -70,31 +69,22 @@ class DashboardActivity : BaseActivity() {
         setContentView(binding.root)
         registerDrawerBackHandler(binding.drawerLayout)
 
-        // Android 13+ runtime notification permission (Phones)
         askNotificationPermissionIfNeeded()
 
         prefs = PreferenceManager(this)
         repository = LiveRepository(this)
 
-        // 1. Check Credentials (Offline Check)
         if (!hasCredentials()) {
             startActivity(Intent(this, LoginActivity::class.java))
             finishAffinity()
             return
         }
 
-        // 2. Load UI instantly from local data (Offline-First)
         loadDashboard()
-
-        // 3. Setup UI interactions
         binding.cardLiveTv.post { binding.cardLiveTv.requestFocus() }
         setupDrawerAndMenu()
         setClickListeners()
-
-        // 4. Start Clock
         handler.post(clockRunnable)
-
-        // 5. Auto sync on start (respects 24h policy)
         syncInitialData(forceRefresh = false)
     }
 
@@ -121,14 +111,6 @@ class DashboardActivity : BaseActivity() {
         grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == REQ_POST_NOTIFICATIONS) {
-            val allowed = grantResults.isNotEmpty() &&
-                    grantResults[0] == PackageManager.PERMISSION_GRANTED
-            if (!allowed) {
-                // Optional: user denied
-                // Toast.makeText(this, "Notifications disabled", Toast.LENGTH_SHORT).show()
-            }
-        }
     }
 
     private fun hasCredentials(): Boolean {
@@ -170,29 +152,24 @@ class DashboardActivity : BaseActivity() {
                     closeRightDrawer(binding.drawerLayout)
                     true
                 }
-
                 R.id.action_refresh_all -> {
                     syncInitialData(forceRefresh = true)
                     true
                 }
-
                 R.id.action_refresh_guide -> {
                     refreshTvGuide()
                     true
                 }
-
                 R.id.action_settings -> {
                     startActivity(Intent(this, SettingsActivity::class.java))
                     true
                 }
-
                 R.id.action_logout -> {
                     prefs.clear()
                     startActivity(Intent(this, LoginActivity::class.java))
                     finishAffinity()
                     true
                 }
-
                 else -> false
             }
         }
@@ -230,8 +207,6 @@ class DashboardActivity : BaseActivity() {
             Toast.makeText(this, "Notifications", Toast.LENGTH_SHORT).show()
         }
 
-        // Live Chat card: update the label and icon while keeping the existing
-        // ChatHubActivity navigation unchanged.
         val supportContent = binding.cardSupport.getChildAt(0) as? LinearLayout
         (supportContent?.getChildAt(0) as? ImageView)?.setImageResource(R.drawable.ic_live_chat)
         (supportContent?.getChildAt(1) as? TextView)?.text = "Live Chat"
@@ -269,6 +244,7 @@ class DashboardActivity : BaseActivity() {
         val qrBitmap = Bitmap.createBitmap(
             pixels,
             0,
+            qrSize,
             qrSize,
             qrSize,
             Bitmap.Config.ARGB_8888
@@ -317,9 +293,6 @@ class DashboardActivity : BaseActivity() {
             .show()
     }
 
-    // ----------------------------
-    // Sync with 24h policy
-    // ----------------------------
     private fun syncInitialData(forceRefresh: Boolean = false) {
         if (!hasCredentials()) return
         if (isInitialSyncRunning) return
@@ -329,7 +302,6 @@ class DashboardActivity : BaseActivity() {
         val twentyFourHoursInMillis = 24L * 60L * 60L * 1000L
         val isFirstSync = lastSyncTime <= 0L
 
-        // If not forced and not first sync and within 24h -> skip sync
         if (!forceRefresh && !isFirstSync && (currentTime - lastSyncTime < twentyFourHoursInMillis)) {
             return
         }
@@ -359,7 +331,6 @@ class DashboardActivity : BaseActivity() {
             )
         }
     }
-
 
     override fun onDestroy() {
         super.onDestroy()
