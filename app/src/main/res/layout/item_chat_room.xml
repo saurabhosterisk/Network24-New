@@ -4,55 +4,82 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="horizontal"
-    android:padding="14dp"
+    android:padding="12dp"
     android:gravity="center_vertical"
     android:background="?attr/selectableItemBackground"
     android:focusable="true"
     android:clickable="true">
 
-    <!-- 1. Emoji -->
     <TextView
         android:id="@+id/tvEmoji"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:gravity="center"
         android:text="💬"
-        android:textSize="18sp"/>
+        android:textSize="18sp" />
 
-    <!-- 2. Room ka naam (layout_weight="1" hone se yeh bachi hui saari jagah le lega) -->
-    <TextView
-        android:id="@+id/tvRoomName"
+    <LinearLayout
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginStart="10dp"
         android:layout_weight="1"
-        android:text="General Chat"
-        android:textColor="#EAEFFB"
-        android:textSize="16sp"
-        android:textStyle="normal"/> <!-- Isko adapter se Bold karenge -->
+        android:layout_marginStart="10dp"
+        android:orientation="vertical">
 
-    <!-- 3. NEW Badge (Room name ke baad aayega) -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/tvRoomName"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="General Discussions"
+                android:textColor="#EAEFFB"
+                android:textSize="15sp"
+                android:maxLines="1"
+                android:ellipsize="end" />
+
+            <TextView
+                android:id="@+id/tvReadOnly"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:text="READ ONLY"
+                android:textColor="#FFB300"
+                android:textSize="9sp"
+                android:textStyle="bold"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/tvLastMessage"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:text="No messages yet"
+            android:textColor="#7F8A9A"
+            android:textSize="12sp"
+            android:maxLines="1"
+            android:ellipsize="end" />
+    </LinearLayout>
+
     <TextView
         android:id="@+id/badgeUnreadNew"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginEnd="8dp"
+        android:layout_marginStart="8dp"
         android:background="@drawable/bg_badge_red"
+        android:minWidth="28dp"
+        android:gravity="center"
         android:paddingHorizontal="6dp"
-        android:paddingVertical="2dp"
+        android:paddingVertical="3dp"
         android:text="NEW"
         android:textColor="#FFFFFF"
-        android:textSize="10sp"
+        android:textSize="9sp"
         android:textStyle="bold"
-        android:visibility="gone" /> <!-- Default me hide rahega -->
-
-    <!-- 4. READ ONLY Tag (Sabse last me aayega) -->
-    <TextView
-        android:id="@+id/tvReadOnly"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="READ ONLY"
-        android:textColor="#FFB300"
-        android:textSize="12sp"
-        android:visibility="gone"/>
+        android:visibility="gone" />
 
 </LinearLayout>
