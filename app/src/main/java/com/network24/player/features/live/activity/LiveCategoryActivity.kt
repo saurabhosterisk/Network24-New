@@ -27,6 +27,7 @@ import com.network24.player.features.live.models.LiveCategory
 import com.network24.player.features.live.repository.LiveRepository
 import com.network24.player.features.live.repository.SyncCallback
 import com.network24.player.features.login.activity.LoginActivity
+import com.network24.player.features.settings.activity.SettingsActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -86,7 +87,6 @@ class LiveCategoryActivity : BaseActivity() {
     }
 
     private fun loadCategoriesFromDB() {
-        // Safe: called from Main Thread
         binding.edtSearch.clearFocus()
 
         lifecycleScope.launch(Dispatchers.IO) {
@@ -151,7 +151,6 @@ class LiveCategoryActivity : BaseActivity() {
                 password = prefs.getPassword(),
                 callback = object : SyncCallback {
                     override fun onSuccess() {
-                        // ✅ FIX: Force UI thread update for callbacks
                         lifecycleScope.launch(Dispatchers.Main) {
                             isRefreshing = false
                             prefs.setLastSyncTime(System.currentTimeMillis())
@@ -160,7 +159,6 @@ class LiveCategoryActivity : BaseActivity() {
                         }
                     }
                     override fun onError(message: String) {
-                        // ✅ FIX: Force UI thread update for callbacks
                         lifecycleScope.launch(Dispatchers.Main) {
                             isRefreshing = false
                             onError("Failed to refresh: $message")
@@ -192,7 +190,10 @@ class LiveCategoryActivity : BaseActivity() {
                     refreshTvGuide()
                     true
                 }
-                R.id.action_settings -> true
+                R.id.action_settings -> {
+                    startActivity(Intent(this, SettingsActivity::class.java))
+                    true
+                }
                 R.id.action_logout -> {
                     prefs.clear()
                     startActivity(Intent(this, LoginActivity::class.java))
@@ -291,7 +292,6 @@ class LiveCategoryActivity : BaseActivity() {
     }
 
     private fun filter(keyword: String) {
-        // ✅ FIX: Null safety added for category_name
         val filtered = allCategories.filter { it.category_name.contains(keyword, true) }
         categoryAdapter.updateList(filtered)
     }
