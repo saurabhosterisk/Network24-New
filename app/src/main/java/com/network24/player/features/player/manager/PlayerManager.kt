@@ -131,6 +131,16 @@ object PlayerManager {
         player.play()
     }
 
+    fun retryCurrent() {
+        val player = exoPlayer ?: return
+        if (currentUrl.isNullOrBlank()) return
+
+        // Keep the same MediaItem/source. Re-preparing the existing live source is
+        // less disruptive than stopping, clearing and rebuilding the stream URL.
+        player.prepare()
+        player.play()
+    }
+
     fun pause() { exoPlayer?.pause() }
     fun resume() { exoPlayer?.play() }
 
