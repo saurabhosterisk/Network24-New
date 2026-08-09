@@ -16,7 +16,8 @@ data class ChatMessage(
     val replyToMessageId: String? = null,
     val replyToSenderName: String? = null,
     val replyToText: String? = null,
-    val mentions: List<String> = emptyList()
+    val mentions: List<String> = emptyList(),
+    val reactions: Map<String, List<String>> = emptyMap()
 )
 
 class ChatRepository(
@@ -29,19 +30,12 @@ class ChatRepository(
         onUpdate: (List<ChatMessage>) -> Unit,
         onError: (Exception) -> Unit
     ): ListenerRegistration {
-        return db.collection("rooms")
-            .document(roomId)
-            .collection("messages")
+        return db.collection("rooms").document(roomId).collection("messages")
             .orderBy("ts", Query.Direction.ASCENDING)
             .limit(limit)
             .addSnapshotListener { snap, err ->
-                if (err != null) {
-                    onError(err)
-                    return@addSnapshotListener
-                }
-                val docs = snap?.documents ?: emptyList()
-                val messages = docs.mapNotNull { it.toChatMessageOrNull() }
-                onUpdate(messages)
+                if (err != null) { onError(err); return@addSnapshotListener }
+                onUpdate(snap?.documents.orEmpty().mapNotNull { it.toChatMessageOrNull() })
             }
     }
 
@@ -56,71 +50,74 @@ class ChatRepository(
         onError: (Exception) -> Unit
     ) {
         val payload = hashMapOf<String, Any>(
-            "text" to text,
-            "senderId" to senderId,
-            "senderName" to senderName,
+            "text" to text, "senderId" to senderId, "senderName" to senderName,
             "ts" to FieldValue.serverTimestamp()
         )
-
         if (replyTo != null) {
             payload["replyToMessageId"] = replyTo.id
             payload["replyToSenderName"] = replyTo.senderName
             payload["replyToText"] = replyTo.text.take(180)
         }
-
-        if (mentions.isNotEmpty()) {
-            payload["mentions"] = mentions
-        }
-
-        db.collection("rooms")
-            .document(roomId)
-            .collection("messages")
-            .add(payload)
-            .addOnSuccessListener { onOk() }
-            .addOnFailureListener { onError(it) }
+        if (mentions.isNotEmpty()) payload["mentions"] = mentions
+        db.collection("rooms").document(roomId).collection("messages").add(payload)
+            .addOnSuccessListener { onOk() }.addOnFailureListener { onError(it) }
     }
 
-    fun reportMessage(
+    fun toggleReaction(
         roomId: String,
-        message: ChatMessage,
-        reporterId: String,
-        reporterName: String,
+        messageId: String,
+        emoji: String,
+        userId: String,
         onOk: () -> Unit,
         onError: (Exception) -> Unit
     ) {
-        val payload = hashMapOf<String, Any>(
-            "roomId" to roomId,
-            "messageId" to message.id,
-            "messageText" to message.text.take(1000),
-            "messageSenderId" to message.senderId,
-            "messageSenderName" to message.senderName,
-            "reporterId" to reporterId,
-            "reporterName" to reporterName,
-            "ts" to FieldValue.serverTimestamp(),
-            "status" to "open"
-        )
+        val ref = db.collection("rooms").document(roomId).collection("messages").document(messageId)
+        db.runTransaction { transaction ->
+            val snap = transaction.get(ref)
+            val raw = snap.get("reactions") as? Map<*, *> ?: emptyMap<Any, Any>()
+            val reactions = raw.mapValues { (_, value) ->
+                (value as? List<*>)?.mapNotNull { it as? String }?.toMutableList() ?: mutableListOf()
+            }.toMutableMap()
+            val users = reactions[emoji] ?: mutableListOf()
+            if (users.contains(userId)) users.remove(userId) else users.add(userId)
+            if (users.isEmpty()) reactions.remove(emoji) else reactions[emoji] = users
+            transaction.update(ref, "reactions", reactions)
+        }.addOnSuccessListener { onOk() }.addOnFailureListener { onError(it) }
+    }
 
-        db.collection("chat_reports")
-            .add(payload)
-            .addOnSuccessListener { onOk() }
-            .addOnFailureListener { onError(it) }
+    fun reportMessage(
+        roomId: String, message: ChatMessage, reporterId: String, reporterName: String,
+        onOk: () -> Unit, onError: (Exception) -> Unit
+    ) {
+        val payload = hashMapOf<String, Any>(
+            "roomId" to roomId, "messageId" to message.id,
+            "messageText" to message.text.take(1000), "messageSenderId" to message.senderId,
+            "messageSenderName" to message.senderName, "reporterId" to reporterId,
+            "reporterName" to reporterName, "ts" to FieldValue.serverTimestamp(), "status" to "open"
+        )
+        db.collection("chat_reports").add(payload)
+            .addOnSuccessListener { onOk() }.addOnFailureListener { onError(it) }
     }
 
     private fun DocumentSnapshot.toChatMessageOrNull(): ChatMessage? {
         val text = getString("text") ?: return null
-        val senderId = getString("senderId") ?: ""
-        val senderName = getString("senderName") ?: ""
-        val ts = getTimestamp("ts")
+        val rawReactions = get("reactions") as? Map<*, *> ?: emptyMap<Any, Any>()
+        val reactions = rawReactions.mapNotNull { (key, value) ->
+            val emoji = key as? String ?: return@mapNotNull null
+            val users = (value as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
+            emoji to users
+        }.toMap()
         return ChatMessage(
             id = id,
             text = text,
-            senderId = senderId,
-            senderName = senderName,
-            ts = ts,
+            senderId = getString("senderId") ?: "",
+            senderName = getString("senderName") ?: "",
+            ts = getTimestamp("ts"),
             replyToMessageId = getString("replyToMessageId"),
             replyToSenderName = getString("replyToSenderName"),
             replyToText = getString("replyToText"),
-            mentions = (get("mentions") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
+            mentions = (get("mentions") as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
+            reactions = reactions
         )
     }
 }
