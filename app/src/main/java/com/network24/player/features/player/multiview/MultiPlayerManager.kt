@@ -41,15 +41,13 @@ class MultiPlayerManager(
 
         return ExoPlayer.Builder(
             context.applicationContext,
-            StreamDataSourceFactory.createRenderersFactory(context)
+            StreamDataSourceFactory.createSoftwareRenderersFactory(context)
         )
             .setLoadControl(loadControl)
             .setMediaSourceFactory(StreamDataSourceFactory.createMediaSourceFactory())
             .build()
             .apply {
                 playWhenReady = true
-                // Keep the audio renderer enabled. Only volume is controlled by
-                // setAudioFocus(), so the focused window can produce audio.
                 volume = 0f
 
                 addListener(object : Player.Listener {
@@ -73,8 +71,6 @@ class MultiPlayerManager(
 
                         val httpError = findHttpError(error)
                         if (httpError != null) {
-                            // A server rejection such as HTTP 403 should not be
-                            // hammered with automatic retries.
                             listener?.onError(
                                 slot,
                                 "HTTP ${httpError.first} from ${httpError.second}"
