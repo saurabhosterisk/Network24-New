@@ -5,11 +5,14 @@ import android.os.Bundle
 import android.view.View
 import android.widget.Toast
 import androidx.lifecycle.lifecycleScope
+import com.network24.player.features.live.repository.CategorySettingsRepository
 import com.network24.player.features.dashboard.activity.DashboardActivity
 import com.network24.player.core.base.BaseActivity
 import com.network24.player.core.preferences.PreferenceManager
 import com.network24.player.databinding.ActivityLoginBinding
 import com.network24.player.features.login.repository.LoginRepository
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import java.io.IOException
 
@@ -125,11 +128,20 @@ class LoginActivity : BaseActivity() {
                     )
 
                     try {
-                        val userId = userInfo.username ?: username // safest
+                        val userId = userInfo.username ?: username
                         val db = DatabaseProvider.get(this@LoginActivity)
-                        val favRepo = FavoritesRepository(db.favoritesDao(), FirebaseFirestore.getInstance())
+                        val firestore = FirebaseFirestore.getInstance()
+                        val favRepo = FavoritesRepository(db.favoritesDao(), firestore)
+                        val categorySettingsRepo = CategorySettingsRepository(firestore, prefs)
 
-                        favRepo.syncFromCloud(userId)
+                        // These are the only normal Firebase reads for the live/favorites state.
+                        // Run them together so login does not wait for them one after another.
+                        coroutineScope {
+                            val favoritesSync = async { favRepo.syncFromCloud(userId) }
+                            val categoriesSync = async { categorySettingsRepo.syncFromCloud(userId) }
+                            favoritesSync.await()
+                            categoriesSync.await()
+                        }
                     } catch (_: Exception) {
                         // ignore: login ko block nahi karna
                     }
