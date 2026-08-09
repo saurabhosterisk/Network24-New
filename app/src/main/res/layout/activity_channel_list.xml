@@ -102,13 +102,13 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            app:layout_constraintGuide_percent="0.35"/>
+            app:layout_constraintGuide_percent="0.33"/>
         <androidx.constraintlayout.widget.Guideline
             android:id="@+id/guideHorizontal"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            app:layout_constraintGuide_percent="0.68"/>
+            app:layout_constraintGuide_percent="0.72"/>
 
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/cardChannels"
@@ -169,7 +169,6 @@
                     android:id="@+id/txtPlayerError"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_gravity="center"
                     app:layout_constraintTop_toTopOf="@+id/playerView"
                     app:layout_constraintBottom_toBottomOf="@+id/playerView"
                     app:layout_constraintStart_toStartOf="@+id/playerView"
@@ -261,32 +260,47 @@
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:orientation="vertical"
-                android:padding="18dp">
-                <TextView
-                    android:layout_width="wrap_content"
+                android:padding="14dp">
+                <LinearLayout
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="TV GUIDE"
-                    android:textColor="#64B5F6"
-                    android:textStyle="bold"
-                    android:textSize="14sp" />
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="TV GUIDE"
+                        android:textColor="#64B5F6"
+                        android:textStyle="bold"
+                        android:textSize="16sp" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="NOW + NEXT"
+                        android:textColor="#9E9E9E"
+                        android:textStyle="bold"
+                        android:textSize="12sp" />
+                </LinearLayout>
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="0dp"
                     android:layout_weight="1"
-                    android:layout_marginTop="8dp"
+                    android:layout_marginTop="10dp"
                     android:orientation="horizontal">
                     <LinearLayout
                         android:layout_width="0dp"
                         android:layout_height="match_parent"
                         android:layout_weight="1"
+                        android:paddingEnd="14dp"
                         android:orientation="vertical">
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="NOW"
+                            android:text="NOW PLAYING"
                             android:textColor="#64B5F6"
                             android:textStyle="bold"
-                            android:textSize="14sp" />
+                            android:textSize="13sp" />
                         <TextView
                             android:id="@+id/txtNowTitle"
                             android:layout_width="match_parent"
@@ -302,7 +316,7 @@
                             android:id="@+id/txtNowTime"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="5dp"
+                            android:layout_marginTop="6dp"
                             android:text="08:00 PM - 09:00 PM"
                             android:textColor="#BDBDBD"
                             android:textSize="13sp" />
@@ -310,21 +324,20 @@
                     <View
                         android:layout_width="1dp"
                         android:layout_height="match_parent"
-                        android:layout_marginStart="18dp"
-                        android:layout_marginEnd="18dp"
                         android:background="#33FFFFFF" />
                     <LinearLayout
                         android:layout_width="0dp"
                         android:layout_height="match_parent"
                         android:layout_weight="1"
+                        android:paddingStart="14dp"
                         android:orientation="vertical">
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="NEXT"
+                            android:text="UP NEXT"
                             android:textColor="#81C784"
                             android:textStyle="bold"
-                            android:textSize="14sp" />
+                            android:textSize="13sp" />
                         <TextView
                             android:id="@+id/txtNextTitle"
                             android:layout_width="match_parent"
@@ -340,7 +353,7 @@
                             android:id="@+id/txtNextTime"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="5dp"
+                            android:layout_marginTop="6dp"
                             android:text="09:00 PM - 10:00 PM"
                             android:textColor="#BDBDBD"
                             android:textSize="13sp" />
@@ -359,5 +372,4 @@
         app:itemIconTint="@android:color/black"
         app:itemTextColor="@android:color/black"
         app:menu="@menu/menu_live_right_drawer" />
-
 </androidx.drawerlayout.widget.DrawerLayout>
