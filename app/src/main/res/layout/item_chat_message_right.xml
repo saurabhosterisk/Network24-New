@@ -11,7 +11,6 @@
     android:paddingTop="8dp"
     android:paddingBottom="8dp">
 
-    <!-- Content (right aligned) -->
     <LinearLayout
         android:layout_width="0dp"
         android:layout_height="wrap_content"
@@ -19,7 +18,6 @@
         android:orientation="vertical"
         android:gravity="end">
 
-        <!-- You + Time row -->
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -45,7 +43,22 @@
                 android:textColor="#78909C"/>
         </LinearLayout>
 
-        <!-- Message -->
+        <TextView
+            android:id="@+id/tvReplyPreview"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="3dp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:paddingTop="3dp"
+            android:paddingBottom="3dp"
+            android:text="↩ Reply to John: original message"
+            android:textSize="11sp"
+            android:textColor="#8FA6C8"
+            android:maxLines="2"
+            android:ellipsize="end"
+            android:visibility="gone"/>
+
         <TextView
             android:id="@+id/tvText"
             android:layout_width="wrap_content"
@@ -63,7 +76,6 @@
             android:lineSpacingExtra="2dp"/>
     </LinearLayout>
 
-    <!-- User icon on the RIGHT -->
     <TextView
         android:id="@+id/tvUserIcon"
         android:layout_width="36dp"
@@ -74,5 +86,4 @@
         android:textSize="16sp"
         android:background="#151B2C"
         android:textColor="@android:color/white"/>
-
 </LinearLayout>
