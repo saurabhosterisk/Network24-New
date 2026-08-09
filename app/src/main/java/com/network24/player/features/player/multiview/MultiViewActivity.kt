@@ -54,7 +54,7 @@ class MultiViewActivity : BaseActivity() {
         if (current != null) setSlot(0, current)
 
         slots.forEachIndexed { index, slot ->
-            slot.background = getDrawable(R.drawable.bg_multiview_slot_selector)
+            slot.foreground = getDrawable(R.drawable.bg_multiview_slot_selector)
             slot.setOnFocusChangeListener { _, hasFocus ->
                 if (hasFocus) {
                     focusedSlot = index
