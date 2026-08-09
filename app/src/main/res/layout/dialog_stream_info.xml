@@ -7,10 +7,10 @@
         <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:padding="12dp">
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="HEALTH &amp; DIAGNOSIS" android:textColor="#7FB3FF" android:textSize="15sp" android:textStyle="bold" />
             <TableLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="7dp" android:stretchColumns="1">
-                <TableRow><TextView android:text="Health Score" android:textColor="#A7B0C0" android:textStyle="bold"/><TextView android:id="@+id/tvHealthScore" android:text="—" android:textColor="@android:color/white"/></TableRow>
-                <TableRow><TextView android:text="Quality" android:textColor="#A7B0C0" android:textStyle="bold"/><TextView android:id="@+id/tvHealthLabel" android:text="—" android:textColor="@android:color/white"/></TableRow>
-                <TableRow><TextView android:text="Rebuffers" android:textColor="#A7B0C0" android:textStyle="bold"/><TextView android:id="@+id/tvRebufferCount" android:text="—" android:textColor="@android:color/white"/></TableRow>
-                <TableRow><TextView android:text="Buffering Time" android:textColor="#A7B0C0" android:textStyle="bold"/><TextView android:id="@+id/tvBufferingTime" android:text="—" android:textColor="@android:color/white"/></TableRow>
+                <TableRow><TextView android:text="Health Score :" android:textColor="#A7B0C0" android:textStyle="bold"/><TextView android:id="@+id/tvHealthScore" android:layout_marginStart="18dp" android:text="—" android:textColor="@android:color/white"/></TableRow>
+                <TableRow><TextView android:text="Quality :" android:textColor="#A7B0C0" android:textStyle="bold"/><TextView android:id="@+id/tvHealthLabel" android:layout_marginStart="18dp" android:text="—" android:textColor="@android:color/white"/></TableRow>
+                <TableRow><TextView android:text="Rebuffers :" android:textColor="#A7B0C0" android:textStyle="bold"/><TextView android:id="@+id/tvRebufferCount" android:layout_marginStart="18dp" android:text="—" android:textColor="@android:color/white"/></TableRow>
+                <TableRow><TextView android:text="Buffering Time :" android:textColor="#A7B0C0" android:textStyle="bold"/><TextView android:id="@+id/tvBufferingTime" android:layout_marginStart="18dp" android:text="—" android:textColor="@android:color/white"/></TableRow>
             </TableLayout>
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
@@ -19,9 +19,9 @@
         <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:padding="12dp">
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="PLAYBACK" android:textColor="#7FB3FF" android:textSize="15sp" android:textStyle="bold" />
             <TableLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="7dp" android:stretchColumns="1">
-                <TableRow><TextView android:text="State" android:textColor="#A7B0C0" android:textStyle="bold"/><TextView android:id="@+id/tvPlayerState" android:text="—" android:textColor="@android:color/white"/></TableRow>
-                <TableRow><TextView android:text="Buffer" android:textColor="#A7B0C0" android:textStyle="bold"/><TextView android:id="@+id/tvBufferedPercent" android:text="—" android:textColor="@android:color/white"/></TableRow>
-                <TableRow><TextView android:text="Buffer Duration" android:textColor="#A7B0C0" android:textStyle="bold"/><TextView android:id="@+id/tvBufferDuration" android:text="—" android:textColor="@android:color/white"/></TableRow>
+                <TableRow><TextView android:text="State :" android:textColor="#A7B0C0" android:textStyle="bold"/><TextView android:id="@+id/tvPlayerState" android:layout_marginStart="18dp" android:text="—" android:textColor="@android:color/white"/></TableRow>
+                <TableRow><TextView android:text="Buffer :" android:textColor="#A7B0C0" android:textStyle="bold"/><TextView android:id="@+id/tvBufferedPercent" android:layout_marginStart="18dp" android:text="—" android:textColor="@android:color/white"/></TableRow>
+                <TableRow><TextView android:text="Buffer Duration :" android:textColor="#A7B0C0" android:textStyle="bold"/><TextView android:id="@+id/tvBufferDuration" android:layout_marginStart="18dp" android:text="—" android:textColor="@android:color/white"/></TableRow>
                 <TableRow android:visibility="gone"><TextView android:text="Position"/><TextView android:id="@+id/tvPosition" android:text="—"/></TableRow>
                 <TableRow android:visibility="gone"><TextView android:text="Load State"/><TextView android:id="@+id/tvLoading" android:text="—"/></TableRow>
                 <TableRow android:visibility="gone"><TextView android:text="Speed"/><TextView android:id="@+id/tvPlaybackSpeed" android:text="—"/></TableRow>
@@ -33,12 +33,12 @@
         <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:padding="12dp">
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="VIDEO / AUDIO" android:textColor="#7FB3FF" android:textSize="15sp" android:textStyle="bold" />
             <TableLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="7dp" android:stretchColumns="1">
-                <TableRow><TextView android:text="Resolution" android:textColor="#A7B0C0" android:textStyle="bold"/><TextView android:id="@+id/tvResolution" android:text="—" android:textColor="@android:color/white"/></TableRow>
-                <TableRow><TextView android:text="Video Codec" android:textColor="#A7B0C0" android:textStyle="bold"/><TextView android:id="@+id/tvVideoCodec" android:text="—" android:textColor="@android:color/white"/></TableRow>
-                <TableRow><TextView android:text="Video Bitrate" android:textColor="#A7B0C0" android:textStyle="bold"/><TextView android:id="@+id/tvVideoBitrate" android:text="—" android:textColor="@android:color/white"/></TableRow>
-                <TableRow><TextView android:text="Frame Rate" android:textColor="#A7B0C0" android:textStyle="bold"/><TextView android:id="@+id/tvFrameRate" android:text="—" android:textColor="@android:color/white"/></TableRow>
-                <TableRow android:visibility="gone"><TextView android:text="Audio Codec"/><TextView android:id="@+id/tvAudioCodec" android:text="—"/></TableRow>
-                <TableRow android:visibility="gone"><TextView android:text="Audio"/><TextView android:id="@+id/tvAudioDetails" android:text="—"/></TableRow>
+                <TableRow><TextView android:text="Resolution :" android:textColor="#A7B0C0" android:textStyle="bold"/><TextView android:id="@+id/tvResolution" android:layout_marginStart="18dp" android:text="—" android:textColor="@android:color/white"/></TableRow>
+                <TableRow><TextView android:text="Video Codec :" android:textColor="#A7B0C0" android:textStyle="bold"/><TextView android:id="@+id/tvVideoCodec" android:layout_marginStart="18dp" android:text="—" android:textColor="@android:color/white"/></TableRow>
+                <TableRow><TextView android:text="Audio Codec :" android:textColor="#A7B0C0" android:textStyle="bold"/><TextView android:id="@+id/tvAudioCodec" android:layout_marginStart="18dp" android:text="—" android:textColor="@android:color/white"/></TableRow>
+                <TableRow><TextView android:text="Audio :" android:textColor="#A7B0C0" android:textStyle="bold"/><TextView android:id="@+id/tvAudioDetails" android:layout_marginStart="18dp" android:text="—" android:textColor="@android:color/white"/></TableRow>
+                <TableRow android:visibility="gone"><TextView android:text="Video Bitrate"/><TextView android:id="@+id/tvVideoBitrate" android:text="—"/></TableRow>
+                <TableRow android:visibility="gone"><TextView android:text="Frame Rate"/><TextView android:id="@+id/tvFrameRate" android:text="—"/></TableRow>
             </TableLayout>
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
@@ -47,11 +47,11 @@
         <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:padding="12dp">
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="NETWORK / SOURCE" android:textColor="#7FB3FF" android:textSize="15sp" android:textStyle="bold" />
             <TableLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="7dp" android:stretchColumns="1">
-                <TableRow><TextView android:text="Download" android:textColor="#A7B0C0" android:textStyle="bold"/><TextView android:id="@+id/tvDownloadSpeed" android:text="—" android:textColor="@android:color/white"/></TableRow>
-                <TableRow><TextView android:text="Required" android:textColor="#A7B0C0" android:textStyle="bold"/><TextView android:id="@+id/tvRequiredSpeed" android:text="—" android:textColor="@android:color/white"/></TableRow>
-                <TableRow><TextView android:text="Network" android:textColor="#A7B0C0" android:textStyle="bold"/><TextView android:id="@+id/tvNetworkType" android:text="—" android:textColor="@android:color/white"/></TableRow>
-                <TableRow><TextView android:text="Live Latency" android:textColor="#A7B0C0" android:textStyle="bold"/><TextView android:id="@+id/tvLiveLatency" android:text="—" android:textColor="@android:color/white"/></TableRow>
-                <TableRow><TextView android:text="Last Error" android:textColor="#A7B0C0" android:textStyle="bold"/><TextView android:id="@+id/tvLastError" android:text="None" android:textColor="@android:color/white" android:maxLines="2"/></TableRow>
+                <TableRow><TextView android:text="Download :" android:textColor="#A7B0C0" android:textStyle="bold"/><TextView android:id="@+id/tvDownloadSpeed" android:layout_marginStart="18dp" android:text="—" android:textColor="@android:color/white"/></TableRow>
+                <TableRow><TextView android:text="Required :" android:textColor="#A7B0C0" android:textStyle="bold"/><TextView android:id="@+id/tvRequiredSpeed" android:layout_marginStart="18dp" android:text="—" android:textColor="@android:color/white"/></TableRow>
+                <TableRow><TextView android:text="Network :" android:textColor="#A7B0C0" android:textStyle="bold"/><TextView android:id="@+id/tvNetworkType" android:layout_marginStart="18dp" android:text="—" android:textColor="@android:color/white"/></TableRow>
+                <TableRow android:visibility="gone"><TextView android:text="Live Latency"/><TextView android:id="@+id/tvLiveLatency" android:text="—"/></TableRow>
+                <TableRow android:visibility="gone"><TextView android:text="Last Error"/><TextView android:id="@+id/tvLastError" android:text="None"/></TableRow>
                 <TableRow android:visibility="gone"><TextView android:text="Server"/><TextView android:id="@+id/tvServerHost" android:text="—"/></TableRow>
             </TableLayout>
         </LinearLayout>
