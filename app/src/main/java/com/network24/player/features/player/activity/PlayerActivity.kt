@@ -1,5 +1,6 @@
 package com.network24.player.features.player.activity
 
+import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import android.os.Handler
@@ -23,6 +24,7 @@ import com.network24.player.databinding.ActivityPlayerBinding
 import com.network24.player.features.live.models.LiveChannel
 import com.network24.player.features.live.repository.LiveRepository
 import com.network24.player.features.player.manager.PlayerManager
+import com.network24.player.features.player.multiview.MultiViewActivity
 import com.network24.player.features.player.state.PlayerState
 import com.network24.player.features.player.ui.dialogs.StreamInfoDialog
 import kotlinx.coroutines.Dispatchers
@@ -155,6 +157,14 @@ class PlayerActivity : BaseActivity() {
                 else -> { binding.playerView.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH; "Aspect Ratio: Fixed Width" }
             }
             Toast.makeText(this, msg, Toast.LENGTH_SHORT).show(); showUiWithTimeout()
+        }
+        binding.btnGrid.setOnClickListener {
+            if (PlayerState.channels.size < 2) {
+                Toast.makeText(this, "Multi-view needs at least 2 channels", Toast.LENGTH_SHORT).show()
+            } else {
+                startActivity(Intent(this, MultiViewActivity::class.java))
+                showUiWithTimeout()
+            }
         }
         binding.btnSubtitle.setOnClickListener {
             isSubtitleEnabled = !isSubtitleEnabled; toggleSubtitles(isSubtitleEnabled)
