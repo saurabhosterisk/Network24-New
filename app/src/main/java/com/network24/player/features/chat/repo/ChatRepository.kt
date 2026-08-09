@@ -12,7 +12,11 @@ data class ChatMessage(
     val text: String = "",
     val senderId: String = "",
     val senderName: String = "",
-    val ts: Timestamp? = null
+    val ts: Timestamp? = null,
+    val replyToMessageId: String? = null,
+    val replyToSenderName: String? = null,
+    val replyToText: String? = null,
+    val mentions: List<String> = emptyList()
 )
 
 class ChatRepository(
@@ -46,15 +50,27 @@ class ChatRepository(
         text: String,
         senderId: String,
         senderName: String,
+        replyTo: ChatMessage? = null,
+        mentions: List<String> = emptyList(),
         onOk: () -> Unit,
         onError: (Exception) -> Unit
     ) {
-        val payload = hashMapOf(
+        val payload = hashMapOf<String, Any>(
             "text" to text,
             "senderId" to senderId,
             "senderName" to senderName,
             "ts" to FieldValue.serverTimestamp()
         )
+
+        if (replyTo != null) {
+            payload["replyToMessageId"] = replyTo.id
+            payload["replyToSenderName"] = replyTo.senderName
+            payload["replyToText"] = replyTo.text.take(180)
+        }
+
+        if (mentions.isNotEmpty()) {
+            payload["mentions"] = mentions
+        }
 
         db.collection("rooms")
             .document(roomId)
@@ -74,7 +90,11 @@ class ChatRepository(
             text = text,
             senderId = senderId,
             senderName = senderName,
-            ts = ts
+            ts = ts,
+            replyToMessageId = getString("replyToMessageId"),
+            replyToSenderName = getString("replyToSenderName"),
+            replyToText = getString("replyToText"),
+            mentions = (get("mentions") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
         )
     }
 }
