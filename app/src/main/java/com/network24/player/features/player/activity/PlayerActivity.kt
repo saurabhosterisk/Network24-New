@@ -4,7 +4,6 @@ import android.graphics.Color
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.util.Base64
 import android.view.KeyEvent
 import android.view.View
 import android.widget.Toast
@@ -40,8 +39,13 @@ class PlayerActivity : BaseActivity() {
     private lateinit var repository: LiveRepository
 
     private var retryCount = 0
-    private val MAX_RETRIES = 8
     private var retryJob: Job? = null
+    private var recoveryStartedAtMs = 0L
+    private var errorActive = false
+
+    private companion object {
+        private const val RECOVERY_WINDOW_MS = 30_000L
+    }
 
     private var isSubtitleEnabled = false
     private var currentAspectRatioIndex = 0
@@ -64,61 +68,76 @@ class PlayerActivity : BaseActivity() {
         override fun onPlaybackStateChanged(playbackState: Int) {
             if (playbackState == Player.STATE_BUFFERING) {
                 binding.progressBar.visibility = View.VISIBLE
-            } else {
-                binding.progressBar.visibility = View.GONE
-                if (playbackState == Player.STATE_READY) {
-                    retryCount = 0
-                    binding.txtPlayerError.visibility = View.GONE
-                    binding.btnReportChannel.visibility = View.GONE
-                }
+                return
+            }
+
+            binding.progressBar.visibility = View.GONE
+
+            if (playbackState == Player.STATE_READY) {
+                retryJob?.cancel()
+                retryJob = null
+                retryCount = 0
+                recoveryStartedAtMs = 0L
+                errorActive = false
+                binding.txtPlayerError.visibility = View.GONE
+                binding.btnReportChannel.visibility = View.GONE
             }
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
-            if (isPlaying) {
-                binding.btnPlayPause.setImageResource(R.drawable.ic_pause)
-            } else {
-                binding.btnPlayPause.setImageResource(R.drawable.ic_play)
-            }
+            binding.btnPlayPause.setImageResource(
+                if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play
+            )
         }
 
         override fun onPlayerError(error: PlaybackException) {
             super.onPlayerError(error)
 
-            if (retryCount < MAX_RETRIES) {
-                retryCount++
-                val delayMs = when (retryCount) {
-                    1 -> 2000L
-                    2 -> 3000L
-                    3 -> 5000L
-                    4 -> 7000L
-                    5 -> 10000L
-                    6 -> 12000L
-                    7 -> 15000L
-                    else -> 20000L
-                }
-                val toastMsg = "Reconnecting... ($retryCount/$MAX_RETRIES)"
-                Toast.makeText(this@PlayerActivity, toastMsg, Toast.LENGTH_SHORT).show()
+            // A single player error is not enough to declare a live stream dead.
+            // Give a live stream a bounded recovery window, while keeping the
+            // total wait short enough that a genuinely dead channel does not trap the user.
+            if (recoveryStartedAtMs == 0L) {
+                recoveryStartedAtMs = System.currentTimeMillis()
+            }
 
-                retryJob?.cancel()
-                retryJob = lifecycleScope.launch(Dispatchers.Main) {
-                    delay(delayMs)
-                    if (!isFinishing && !isDestroyed) {
-                        binding.progressBar.visibility = View.VISIBLE
-                        binding.txtPlayerError.visibility = View.GONE
-                        binding.btnReportChannel.visibility = View.GONE
-                        PlayerManager.retryCurrent()
-                    }
+            val elapsed = System.currentTimeMillis() - recoveryStartedAtMs
+            if (elapsed >= RECOVERY_WINDOW_MS) {
+                showPermanentPlaybackError()
+                return
+            }
+
+            retryCount++
+            val remainingMs = RECOVERY_WINDOW_MS - elapsed
+            val retryDelay = when (retryCount) {
+                1 -> 2_000L
+                2 -> 3_000L
+                3 -> 5_000L
+                4 -> 7_000L
+                else -> 8_000L
+            }.coerceAtMost(remainingMs)
+
+            Toast.makeText(
+                this@PlayerActivity,
+                "Reconnecting... (${elapsed / 1000}s)",
+                Toast.LENGTH_SHORT
+            ).show()
+
+            retryJob?.cancel()
+            retryJob = lifecycleScope.launch(Dispatchers.Main) {
+                delay(retryDelay)
+
+                if (isFinishing || isDestroyed) return@launch
+
+                val recoveryElapsed = System.currentTimeMillis() - recoveryStartedAtMs
+                if (recoveryElapsed >= RECOVERY_WINDOW_MS) {
+                    showPermanentPlaybackError()
+                    return@launch
                 }
-            } else {
-                binding.progressBar.visibility = View.GONE
-                binding.txtPlayerError.text = "Unable to play this stream right now. It may be temporarily unavailable or your connection may be unstable."
-                binding.txtPlayerError.visibility = View.VISIBLE
-                binding.btnReportChannel.visibility = View.VISIBLE
-                binding.btnReportChannel.post {
-                    binding.btnReportChannel.requestFocus()
-                }
-                showUiWithTimeout()
+
+                binding.progressBar.visibility = View.VISIBLE
+                binding.txtPlayerError.visibility = View.GONE
+                binding.btnReportChannel.visibility = View.GONE
+                PlayerManager.retryCurrent()
             }
         }
     }
@@ -139,19 +158,15 @@ class PlayerActivity : BaseActivity() {
 
         binding.progressBar.visibility = View.GONE
         binding.btnReportChannel.visibility = View.GONE
-
         binding.playerView.setShowSubtitleButton(false)
         binding.playerView.subtitleView?.setApplyEmbeddedStyles(false)
 
         updateChannelUI(PlayerState.currentChannel())
         showUiWithTimeout()
         setupClickListeners()
-
         PlayerManager.moveTo(this, binding.playerView)
 
-        onBackPressedDispatcher.addCallback(this) {
-            finish()
-        }
+        onBackPressedDispatcher.addCallback(this) { finish() }
     }
 
     private fun buildStreamUrl(channel: LiveChannel): String {
@@ -173,8 +188,7 @@ class PlayerActivity : BaseActivity() {
         binding.btnPrev.setOnClickListener { playPreviousChannel(); showUiWithTimeout() }
 
         binding.btnInfo.setOnClickListener {
-            val currentChannel = PlayerState.currentChannel()
-            val streamId = currentChannel?.stream_id
+            val streamId = PlayerState.currentChannel()?.stream_id
             if (streamId == null) {
                 Toast.makeText(this, "Channel not available", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
@@ -246,9 +260,7 @@ class PlayerActivity : BaseActivity() {
                 binding.txtPlayerError.visibility = View.GONE
                 binding.btnReportChannel.visibility = View.GONE
             }
-            binding.playerView.player?.playbackState == Player.STATE_BUFFERING -> {
-                binding.progressBar.visibility = View.VISIBLE
-            }
+            binding.playerView.player?.playbackState == Player.STATE_BUFFERING -> binding.progressBar.visibility = View.VISIBLE
             binding.playerView.player?.playerError != null -> {
                 binding.progressBar.visibility = View.GONE
                 binding.txtPlayerError.visibility = View.VISIBLE
@@ -272,6 +284,18 @@ class PlayerActivity : BaseActivity() {
         retryJob?.cancel()
         PlayerManager.detach(binding.playerView)
         super.onDestroy()
+    }
+
+    private fun showPermanentPlaybackError() {
+        retryJob?.cancel()
+        retryJob = null
+        errorActive = true
+        binding.progressBar.visibility = View.GONE
+        binding.txtPlayerError.text = "Unable to play this stream right now. It may be temporarily unavailable or your connection may be unstable."
+        binding.txtPlayerError.visibility = View.VISIBLE
+        binding.btnReportChannel.visibility = View.VISIBLE
+        binding.btnReportChannel.post { binding.btnReportChannel.requestFocus() }
+        showUiWithTimeout()
     }
 
     private fun showUiWithTimeout() {
@@ -303,6 +327,7 @@ class PlayerActivity : BaseActivity() {
 
     private fun playNextChannel() {
         PlayerState.next()?.let { nextChannel ->
+            retryJob?.cancel()
             PlayerManager.play(this, binding.playerView, buildStreamUrl(nextChannel))
             updateChannelUI(nextChannel)
             toggleSubtitles(isSubtitleEnabled)
@@ -311,6 +336,7 @@ class PlayerActivity : BaseActivity() {
 
     private fun playPreviousChannel() {
         PlayerState.previous()?.let { prevChannel ->
+            retryJob?.cancel()
             PlayerManager.play(this, binding.playerView, buildStreamUrl(prevChannel))
             updateChannelUI(prevChannel)
             toggleSubtitles(isSubtitleEnabled)
@@ -320,9 +346,7 @@ class PlayerActivity : BaseActivity() {
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         if (binding.bottomOverlay.visibility != View.VISIBLE) {
             when (keyCode) {
-                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                    showUiWithTimeout(); return true
-                }
+                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> { showUiWithTimeout(); return true }
             }
         } else {
             hideHandler.removeCallbacks(hideRunnable)
@@ -344,6 +368,8 @@ class PlayerActivity : BaseActivity() {
         if (channel == null) return
         retryJob?.cancel()
         retryCount = 0
+        recoveryStartedAtMs = 0L
+        errorActive = false
         binding.txtPlayerError.visibility = View.GONE
         binding.btnReportChannel.visibility = View.GONE
         val num = channel.num?.let { "$it - " } ?: ""
