@@ -155,7 +155,8 @@ class DashboardActivity : BaseActivity() {
 
         val normalColor = ContextCompat.getColor(this, R.color.card)
         val focusedColor = Color.rgb(38, 48, 68)
-        val focusStroke = ContextCompat.getColor(this, R.color.primary_light)
+        // Use the clean white focus treatment from the original dashboard instead of red.
+        val focusStroke = Color.WHITE
         val density = resources.displayMetrics.density
         val normalElevation = 3f * density
         val focusedElevation = 8f * density
