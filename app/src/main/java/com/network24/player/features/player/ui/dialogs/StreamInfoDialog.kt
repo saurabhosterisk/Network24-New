@@ -5,6 +5,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -18,6 +19,7 @@ import com.network24.player.core.net.SpeedMonitor
 import com.network24.player.databinding.DialogStreamInfoBinding
 import com.network24.player.features.player.manager.PlayerManager
 import java.util.Locale
+import java.util.concurrent.TimeUnit
 
 class StreamInfoDialog : DialogFragment() {
 
@@ -44,46 +46,50 @@ class StreamInfoDialog : DialogFragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-
         binding.btnClose.setOnClickListener { dismiss() }
+        binding.btnCopy.setOnClickListener {
+            copyToClipboard("Network24 Diagnostics", buildStreamInfoText())
+            Toast.makeText(requireContext(), "Diagnostics copied", Toast.LENGTH_SHORT).show()
+        }
 
-        // First time open
         refreshStaticInfo()
         refreshDynamicInfo()
     }
 
-    /**
-     * Static info: update only when dialog opens or user taps Refresh.
-     * (URL, resolution, codecs, channels, network type etc.)
-     */
     private fun refreshStaticInfo() {
-
         val player = PlayerManager.getExoPlayerOrNull() ?: run {
             setUnknownAll("Player not ready")
             return
         }
 
         val video = player.videoFormat
-        binding.tvResolution.text =
-            if (video != null && video.width > 0 && video.height > 0) "${video.width} × ${video.height}" else "-"
+        binding.tvResolution.text = if (video != null && video.width > 0 && video.height > 0) {
+            "${video.width} × ${video.height}"
+        } else "-"
         binding.tvVideoCodec.text = video?.sampleMimeType ?: "-"
+        binding.tvVideoBitrate.text = formatBitrate(video?.bitrate)
+        binding.tvFrameRate.text = video?.frameRate?.takeIf { it > 0f }?.let {
+            String.format(Locale.US, "%.2f fps", it)
+        } ?: "-"
 
         val audio = player.audioFormat
         binding.tvAudioCodec.text = audio?.sampleMimeType ?: "-"
+        binding.tvAudioDetails.text = if (audio != null) {
+            val channels = if (audio.channelCount > 0) "${audio.channelCount} ch" else ""
+            val sampleRate = if (audio.sampleRate > 0) "${audio.sampleRate} Hz" else ""
+            listOf(channels, sampleRate).filter { it.isNotBlank() }.joinToString(" • ").ifBlank { "-" }
+        } else "-"
+
         binding.tvNetworkType.text = getNetworkTypeOnce()
+        binding.tvServerHost.text = getSafeServerHost()
     }
 
-    /**
-     * Dynamic info: update every second.
-     * (buffer %, download speed, player state, health score, diagnosis)
-     */
     private fun refreshDynamicInfo() {
         val player = PlayerManager.getExoPlayerOrNull() ?: run {
             setUnknownAll("Player not ready")
             return
         }
 
-        // Player state
         val state = when (player.playbackState) {
             Player.STATE_IDLE -> "Idle"
             Player.STATE_BUFFERING -> "Buffering"
@@ -92,49 +98,142 @@ class StreamInfoDialog : DialogFragment() {
             else -> "Unknown"
         }
         binding.tvPlayerState.text = state
-
-        // Buffer %
         binding.tvBufferedPercent.text = "${player.bufferedPercentage}%"
+        binding.tvBufferDuration.text = formatDuration(player.totalBufferedDuration)
+        binding.tvPosition.text = formatPosition(player.currentPosition)
+        binding.tvLoading.text = if (player.isLoading) "Loading data" else "Not loading"
+        binding.tvPlaybackSpeed.text = String.format(Locale.US, "%.2fx", player.playbackParameters.speed)
 
-        // Download speed (from SpeedMonitor / CountingDataSource)
-        val downloadMbps = SpeedMonitor.getMbps().toFloat()
-        binding.tvDownloadSpeed.text =
-            if (downloadMbps > 0f) String.format(Locale.US, "%.2f Mbps", downloadMbps) else "--"
+        val downloadMbps = SpeedMonitor.getMbps()
+        binding.tvDownloadSpeed.text = if (downloadMbps > 0.0) {
+            String.format(Locale.US, "%.2f Mbps", downloadMbps)
+        } else "--"
 
-        // Required speed heuristic (based on resolution)
-        val h = player.videoFormat?.height ?: 0
-        val requiredMbps = when {
-            h >= 2160 -> 30f
-            h >= 1080 -> 12f
-            h >= 720 -> 6f
-            h > 0 -> 3f
-            else -> 0f
+        val requiredMbps = getRequiredSpeedMbps(player.videoFormat?.height ?: 0)
+        binding.tvRequiredSpeed.text = if (requiredMbps > 0f) {
+            String.format(Locale.US, "%.1f Mbps", requiredMbps)
+        } else "-"
+
+        val liveOffset = player.currentLiveOffset
+        binding.tvLiveLatency.text = if (liveOffset != Player.TIME_UNSET && liveOffset >= 0L) {
+            formatDuration(liveOffset)
+        } else "Not available"
+
+        val rebufferCount = PlayerManager.getRebufferCount()
+        val bufferingMs = PlayerManager.getTotalBufferingMs()
+        binding.tvRebufferCount.text = rebufferCount.toString()
+        binding.tvBufferingTime.text = formatDuration(bufferingMs)
+
+        val error = PlayerManager.getLastError()
+        binding.tvLastError.text = if (error == null) {
+            "None"
+        } else {
+            error.errorCodeName ?: "Playback error"
         }
-        binding.tvRequiredSpeed.text =
-            if (requiredMbps > 0f) String.format(Locale.US, "%.1f Mbps", requiredMbps) else "-"
 
-
-        // Health score
-        var score = 100
-        if (player.playbackState == Player.STATE_BUFFERING) score -= 40
-        if (player.bufferedPercentage < 20) score -= 20
-        if (requiredMbps > 0f && downloadMbps > 0f && downloadMbps < requiredMbps) score -= 30
-        score = score.coerceIn(0, 100)
-
+        val score = calculateHealthScore(
+            player = player,
+            downloadMbps = downloadMbps,
+            requiredMbps = requiredMbps,
+            rebufferCount = rebufferCount,
+            hasError = error != null
+        )
         binding.tvHealthScore.text = "$score / 100"
         binding.tvHealthLabel.text = when {
-            score >= 80 -> "GOOD"
-            score >= 50 -> "FAIR"
+            score >= 85 -> "GOOD"
+            score >= 65 -> "FAIR"
             else -> "POOR"
         }
+        binding.tvDiagnosis.text = buildDiagnosis(
+            player = player,
+            downloadMbps = downloadMbps,
+            requiredMbps = requiredMbps,
+            rebufferCount = rebufferCount,
+            bufferingMs = bufferingMs,
+            hasError = error != null
+        )
+    }
 
+    private fun calculateHealthScore(
+        player: Player,
+        downloadMbps: Double,
+        requiredMbps: Float,
+        rebufferCount: Int,
+        hasError: Boolean
+    ): Int {
+        var score = 100
+        if (player.playbackState == Player.STATE_BUFFERING) score -= 25
+        if (player.totalBufferedDuration < 2_000L) score -= 25
+        else if (player.totalBufferedDuration < 5_000L) score -= 10
+        score -= (rebufferCount.coerceAtMost(3) * 8)
+        if (requiredMbps > 0f && downloadMbps > 0.0 && downloadMbps < requiredMbps) score -= 25
+        if (hasError) score -= 20
+        return score.coerceIn(0, 100)
+    }
 
-        // Buffering detected label (if present in your XML)
-        if (hasViewId("tvBufferingDetected")) {
-            val isBuffering = player.playbackState == Player.STATE_BUFFERING
-            val id = resources.getIdentifier("tvBufferingDetected", "id", requireContext().packageName)
-            val v = binding.root.findViewById<android.widget.TextView>(id)
-            v?.text = if (isBuffering) "BUFFERING DETECTED" else "No buffering detected"
+    private fun buildDiagnosis(
+        player: Player,
+        downloadMbps: Double,
+        requiredMbps: Float,
+        rebufferCount: Int,
+        bufferingMs: Long,
+        hasError: Boolean
+    ): String {
+        if (hasError) return "Playback error detected. Try another channel; if other channels work, this stream may be down."
+        if (player.playbackState == Player.STATE_BUFFERING && rebufferCount > 0) {
+            return "Buffering now. The stream is waiting for more data. Check internet speed and server stability."
+        }
+        if (rebufferCount >= 2) {
+            return "Frequent rebuffering detected. Likely network instability or a busy/slow stream source."
+        }
+        if (requiredMbps > 0f && downloadMbps > 0.0 && downloadMbps < requiredMbps) {
+            return "Download speed is below the estimated requirement for this video quality. Internet may be limiting playback."
+        }
+        if (bufferingMs >= 5_000L) {
+            return "Playback has spent noticeable time buffering. Monitor the buffer and download speed."
+        }
+        if (player.totalBufferedDuration < 2_000L) {
+            return "Buffer is low. Playback may become unstable if network speed drops."
+        }
+        return "Connection and playback look healthy. No significant buffering problem detected."
+    }
+
+    private fun getRequiredSpeedMbps(height: Int): Float = when {
+        height >= 2160 -> 30f
+        height >= 1440 -> 18f
+        height >= 1080 -> 12f
+        height >= 720 -> 6f
+        height > 0 -> 3f
+        else -> 0f
+    }
+
+    private fun formatBitrate(bitrate: Int?): String {
+        val value = bitrate ?: -1
+        if (value <= 0) return "-"
+        return if (value >= 1_000_000) {
+            String.format(Locale.US, "%.2f Mbps", value / 1_000_000.0)
+        } else {
+            String.format(Locale.US, "%.0f kbps", value / 1000.0)
+        }
+    }
+
+    private fun formatDuration(ms: Long): String {
+        if (ms < 0L) return "-"
+        val seconds = TimeUnit.MILLISECONDS.toSeconds(ms)
+        return when {
+            seconds < 60 -> "${seconds}s"
+            seconds < 3600 -> String.format(Locale.US, "%d:%02d", seconds / 60, seconds % 60)
+            else -> String.format(Locale.US, "%d:%02d:%02d", seconds / 3600, (seconds % 3600) / 60, seconds % 60)
+        }
+    }
+
+    private fun formatPosition(ms: Long): String = if (ms >= 0L) formatDuration(ms) else "-"
+
+    private fun getSafeServerHost(): String {
+        return try {
+            Uri.parse(PlayerManager.getCurrentUrlOrEmpty()).host ?: "-"
+        } catch (_: Exception) {
+            "-"
         }
     }
 
@@ -154,68 +253,75 @@ class StreamInfoDialog : DialogFragment() {
         }
     }
 
-    private fun hasViewId(idName: String): Boolean {
-        return resources.getIdentifier(idName, "id", requireContext().packageName) != 0
-    }
-
     private fun setUnknownAll(playerStateText: String) {
         binding.tvPlayerState.text = playerStateText
         binding.tvBufferedPercent.text = "-"
+        binding.tvBufferDuration.text = "-"
+        binding.tvPosition.text = "-"
+        binding.tvLoading.text = "-"
+        binding.tvPlaybackSpeed.text = "-"
         binding.tvResolution.text = "-"
         binding.tvVideoCodec.text = "-"
+        binding.tvVideoBitrate.text = "-"
+        binding.tvFrameRate.text = "-"
         binding.tvAudioCodec.text = "-"
-
-        if (hasViewId("tvDownloadSpeed")) binding.tvDownloadSpeed.text = "--"
-        if (hasViewId("tvRequiredSpeed")) binding.tvRequiredSpeed.text = "-"
+        binding.tvAudioDetails.text = "-"
+        binding.tvDownloadSpeed.text = "--"
+        binding.tvRequiredSpeed.text = "-"
+        binding.tvNetworkType.text = "-"
+        binding.tvServerHost.text = "-"
+        binding.tvLiveLatency.text = "-"
+        binding.tvRebufferCount.text = "-"
+        binding.tvBufferingTime.text = "-"
+        binding.tvLastError.text = "-"
+        binding.tvHealthScore.text = "-"
+        binding.tvHealthLabel.text = "-"
+        binding.tvDiagnosis.text = "Player is not ready."
     }
 
     private fun buildStreamInfoText(): String {
-        val url = PlayerManager.getCurrentUrlOrEmpty()
         val player = PlayerManager.getExoPlayerOrNull()
-
-        val playbackState = if (player == null) {
-            "Not ready"
-        } else {
-            when (player.playbackState) {
-                Player.STATE_IDLE -> "Idle"
-                Player.STATE_BUFFERING -> "Buffering"
-                Player.STATE_READY -> if (player.isPlaying) "Playing" else "Paused"
-                Player.STATE_ENDED -> "Ended"
-                else -> "Unknown"
-            }
-        }
-
-        val buffered = player?.bufferedPercentage?.let { "${it}%" } ?: "-"
         val vf = player?.videoFormat
-        val resolution =
-            if (vf != null && vf.width > 0 && vf.height > 0) "${vf.width} x ${vf.height}" else "-"
-        val vCodec = vf?.sampleMimeType ?: "-"
-
         val af = player?.audioFormat
-        val aCodec = af?.sampleMimeType ?: "-"
-        val channels = af?.channelCount?.toString() ?: "-"
-
         val downloadMbps = SpeedMonitor.getMbps()
+        val required = getRequiredSpeedMbps(vf?.height ?: 0)
+        val error = PlayerManager.getLastError()
 
         return """
-STREAM INFORMATION
-URL:
-$url
+NETWORK24 STREAM DIAGNOSTICS
 
-PLAYBACK:
-State: $playbackState
-Buffered: $buffered
+PLAYBACK
+State: ${binding.tvPlayerState.text}
+Buffer: ${binding.tvBufferedPercent.text}
+Buffer duration: ${binding.tvBufferDuration.text}
+Position: ${binding.tvPosition.text}
+Load state: ${binding.tvLoading.text}
+Playback speed: ${binding.tvPlaybackSpeed.text}
+Rebuffers: ${PlayerManager.getRebufferCount()}
+Total buffering: ${formatDuration(PlayerManager.getTotalBufferingMs())}
 
-VIDEO:
-Resolution: $resolution
-Codec: $vCodec
+VIDEO
+Resolution: ${binding.tvResolution.text}
+Codec: ${binding.tvVideoCodec.text}
+Bitrate: ${binding.tvVideoBitrate.text}
+Frame rate: ${binding.tvFrameRate.text}
 
-AUDIO:
-Codec: $aCodec
-Channels: $channels
+AUDIO
+Codec: ${binding.tvAudioCodec.text}
+Details: ${binding.tvAudioDetails.text}
 
-NETWORK:
-Download Speed: ${String.format(Locale.US, "%.2f Mbps", downloadMbps)}
+NETWORK
+Type: ${binding.tvNetworkType.text}
+Server: ${binding.tvServerHost.text}
+Download speed: ${String.format(Locale.US, "%.2f Mbps", downloadMbps)}
+Estimated required: ${if (required > 0f) String.format(Locale.US, "%.1f Mbps", required) else "-"}
+Live latency: ${binding.tvLiveLatency.text}
+
+HEALTH
+Score: ${binding.tvHealthScore.text}
+Quality: ${binding.tvHealthLabel.text}
+Diagnosis: ${binding.tvDiagnosis.text}
+Last error: ${error?.errorCodeName ?: "None"}
 """.trim()
     }
 
