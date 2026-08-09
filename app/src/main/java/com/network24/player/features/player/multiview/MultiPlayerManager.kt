@@ -9,6 +9,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
@@ -39,20 +40,10 @@ class MultiPlayerManager(
     }
 
     private fun createPlayer(slot: Int): ExoPlayer {
-        // Keep each player completely independent. In particular, each player
-        // owns its own LoadControl because Media3 does not allow a LoadControl
-        // to be shared by players running on different playback threads.
         val loadControl = DefaultLoadControl.Builder()
-            .setBufferDurationsMs(
-                15000,
-                50000,
-                1000,
-                2000
-            )
+            .setBufferDurationsMs(15000, 50000, 1000, 2000)
             .build()
 
-        // This is intentionally the same HTTP/DataSource chain as PlayerManager.
-        // The XC server allows playback only for this exact User-Agent.
         val httpFactory = DefaultHttpDataSource.Factory()
             .setUserAgent("N24PlayerPlayer")
             .setAllowCrossProtocolRedirects(true)
@@ -74,11 +65,6 @@ class MultiPlayerManager(
             .apply {
                 playWhenReady = true
                 volume = 0f
-
-                // Do not impose a resolution ceiling here. The normal player
-                // does not impose one either, and some XC providers expose only
-                // 720p/1080p variants. Audio is disabled initially because only
-                // the focused MultiView window should consume audio.
                 trackSelectionParameters = trackSelectionParameters
                     .buildUpon()
                     .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true)
@@ -102,9 +88,6 @@ class MultiPlayerManager(
                             cause.contains("surface", true)
 
                         if (httpError != null) {
-                            // Do not retry HTTP 403 as a decoder problem. A 403 is
-                            // an upstream server rejection and retrying the same
-                            // request only creates more rejected connections.
                             listener?.onError(
                                 slot,
                                 "HTTP ${httpError.first} from ${httpError.second}"
@@ -135,14 +118,15 @@ class MultiPlayerManager(
     }
 
     /**
-     * Returns HTTP response code and sanitized request URL when Media3 exposes
-     * an InvalidResponseCodeException in the cause chain. Credentials are never
-     * included in the UI; only the host/path is shown.
+     * Finds an HTTP response error from the Media3 exception chain.
+     * Uses the public HttpDataSource exception type rather than the concrete
+     * DefaultHttpDataSource implementation, so this remains compatible with
+     * the Media3 version used by the project.
      */
     private fun findHttpError(error: PlaybackException): Pair<Int, String>? {
         var current: Throwable? = error
         while (current != null) {
-            if (current is DefaultHttpDataSource.InvalidResponseCodeException) {
+            if (current is HttpDataSource.InvalidResponseCodeException) {
                 val uri = current.dataSpec.uri
                 return current.responseCode to "${uri.host}${uri.path}"
             }
