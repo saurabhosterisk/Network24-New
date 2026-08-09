@@ -41,8 +41,10 @@ class MultiPlayerManager(
     }
 
     private fun createPlayer(slot: Int): ExoPlayer {
+        // The XC server requires the exact same User-Agent as the normal player.
+        // Do not change this to a MultiView-specific User-Agent.
         val httpFactory = DefaultHttpDataSource.Factory()
-            .setUserAgent("N24PlayerMultiView/1.0")
+            .setUserAgent("N24PlayerPlayer")
             .setAllowCrossProtocolRedirects(true)
         val mediaSourceFactory = DefaultMediaSourceFactory(httpFactory)
         val renderersFactory = DefaultRenderersFactory(context.applicationContext)
