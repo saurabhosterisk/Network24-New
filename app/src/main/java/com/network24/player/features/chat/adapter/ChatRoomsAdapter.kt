@@ -16,29 +16,22 @@ class ChatRoomsAdapter(
 
     private val items = mutableListOf<ChatRoom>()
     private val unread = mutableSetOf<String>()
-
-    // NAYA: Selected room ko track karne ke liye
+    private val previews = mutableMapOf<String, String>()
     private var selectedRoomId: String? = null
-
 
     fun setSelectedRoom(roomId: String) {
         val previousSelectedId = selectedRoomId
         selectedRoomId = roomId
 
-        // 1. Purane selected room ka index dhundo aur usko refresh karo (highlight hatane ke liye)
         if (previousSelectedId != null) {
             val previousIndex = items.indexOfFirst { it.id == previousSelectedId }
-            if (previousIndex != -1) {
-                notifyItemChanged(previousIndex)
-            }
+            if (previousIndex != -1) notifyItemChanged(previousIndex)
         }
 
-        // 2. Naye selected room ka index dhundo aur usko refresh karo (highlight lagane ke liye)
         val newIndex = items.indexOfFirst { it.id == roomId }
-        if (newIndex != -1) {
-            notifyItemChanged(newIndex)
-        }
+        if (newIndex != -1) notifyItemChanged(newIndex)
     }
+
     fun submit(list: List<ChatRoom>) {
         items.clear()
         items.addAll(list)
@@ -47,16 +40,27 @@ class ChatRoomsAdapter(
 
     fun setUnread(roomId: String, isUnread: Boolean) {
         val wasUnread = unread.contains(roomId)
+        if (wasUnread == isUnread) return
 
-        // Agar state change hui hai, tabhi update karo
-        if (wasUnread != isUnread) {
-            if (isUnread) unread.add(roomId) else unread.remove(roomId)
+        if (isUnread) unread.add(roomId) else unread.remove(roomId)
+        val index = items.indexOfFirst { it.id == roomId }
+        if (index != -1) notifyItemChanged(index)
+    }
 
-            val index = items.indexOfFirst { it.id == roomId }
-            if (index != -1) {
-                notifyItemChanged(index)
-            }
+    fun setPreview(roomId: String, senderName: String, text: String) {
+        val preview = if (text.isBlank()) {
+            ""
+        } else if (senderName.isBlank()) {
+            text.trim()
+        } else {
+            "${senderName.trim()}: ${text.trim()}"
         }
+
+        if (previews[roomId] == preview) return
+        previews[roomId] = preview
+
+        val index = items.indexOfFirst { it.id == roomId }
+        if (index != -1) notifyItemChanged(index)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
@@ -67,54 +71,63 @@ class ChatRoomsAdapter(
 
     override fun onBindViewHolder(holder: VH, position: Int) {
         val room = items[position]
-        val isSelected = room.id == selectedRoomId // Check if this is the active room
-        holder.bind(room, unread.contains(room.id), isSelected)
+        holder.bind(
+            room = room,
+            isUnread = unread.contains(room.id),
+            isSelected = room.id == selectedRoomId,
+            preview = previews[room.id]
+        )
     }
 
     override fun getItemCount(): Int = items.size
 
-    class VH(itemView: View, val onClick: (ChatRoom) -> Unit) : RecyclerView.ViewHolder(itemView) {
+    class VH(
+        itemView: View,
+        private val onClick: (ChatRoom) -> Unit
+    ) : RecyclerView.ViewHolder(itemView) {
+
         private val tvEmoji: TextView = itemView.findViewById(R.id.tvEmoji)
         private val tvRoomName: TextView = itemView.findViewById(R.id.tvRoomName)
+        private val tvLastMessage: TextView = itemView.findViewById(R.id.tvLastMessage)
         private val tvReadOnly: TextView = itemView.findViewById(R.id.tvReadOnly)
         private val badgeUnreadNew: TextView = itemView.findViewById(R.id.badgeUnreadNew)
 
-        fun bind(room: ChatRoom, isUnread: Boolean, isSelected: Boolean) {
+        fun bind(
+            room: ChatRoom,
+            isUnread: Boolean,
+            isSelected: Boolean,
+            preview: String?
+        ) {
             tvEmoji.text = room.emoji
             tvRoomName.text = room.name
+            tvLastMessage.text = preview?.takeIf { it.isNotBlank() } ?: "No messages yet"
             tvReadOnly.visibility = if (room.readOnly) View.VISIBLE else View.GONE
 
             if (isUnread) {
                 tvRoomName.setTypeface(null, Typeface.BOLD)
                 tvRoomName.setTextColor(Color.WHITE)
+                tvLastMessage.setTextColor(Color.parseColor("#DDE6F5"))
                 badgeUnreadNew.visibility = View.VISIBLE
             } else {
-                tvRoomName.setTypeface(null, Typeface.NORMAL)
-                tvRoomName.setTextColor(Color.parseColor("#B0BEC5"))
+                tvRoomName.setTypeface(null, if (isSelected) Typeface.BOLD else Typeface.NORMAL)
+                tvRoomName.setTextColor(if (isSelected) Color.WHITE else Color.parseColor("#B0BEC5"))
+                tvLastMessage.setTextColor(Color.parseColor("#7F8A9A"))
                 badgeUnreadNew.visibility = View.GONE
             }
 
-            // NAYA: Background highlight logic
-            // Agar channel selected hai toh permanent highlight color denge
             val defaultBgColor = if (isSelected) Color.parseColor("#2A3655") else Color.TRANSPARENT
             itemView.setBackgroundColor(defaultBgColor)
-
             itemView.setOnClickListener { onClick(room) }
 
-            // TV D-Pad Focus logic
             itemView.setOnFocusChangeListener { v, hasFocus ->
-                if (hasFocus) {
-                    v.setBackgroundColor(Color.parseColor("#1B2438")) // D-Pad focus color
-                } else {
-                    v.setBackgroundColor(defaultBgColor) // Focus hatne par wapas default/selected color
-                }
+                v.setBackgroundColor(
+                    if (hasFocus) Color.parseColor("#1B2438") else defaultBgColor
+                )
             }
         }
     }
 
-
     fun getPositionOf(roomId: String?): Int {
         return items.indexOfFirst { it.id == roomId }
     }
-
 }
