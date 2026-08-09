@@ -30,7 +30,6 @@ object StreamDataSourceFactory {
         return DefaultMediaSourceFactory(createDataSourceFactory())
     }
 
-    /** Normal player: keep the standard Media3 renderer selection. */
     fun createRenderersFactory(context: Context): DefaultRenderersFactory {
         return DefaultRenderersFactory(context.applicationContext).apply {
             setEnableDecoderFallback(true)
@@ -38,15 +37,12 @@ object StreamDataSourceFactory {
     }
 
     /**
-     * MultiView: prefer the bundled Media3 FFmpeg extension renderer.
-     * Supported codecs are therefore decoded in software instead of using the
-     * device MediaCodec decoder first. If a stream codec is not supported by
-     * FFmpeg, Media3 can still fall back to its normal decoder path.
+     * Kept as a separate entry point for MultiView so its renderer strategy can
+     * be changed later without touching the player manager. The FFmpeg
+     * extension is currently not included in this project, so this uses the
+     * standard Media3 renderer selection for now.
      */
     fun createSoftwareRenderersFactory(context: Context): DefaultRenderersFactory {
-        return DefaultRenderersFactory(context.applicationContext).apply {
-            setEnableDecoderFallback(true)
-            setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
-        }
+        return createRenderersFactory(context)
     }
 }
