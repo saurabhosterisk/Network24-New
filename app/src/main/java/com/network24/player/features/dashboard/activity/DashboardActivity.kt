@@ -253,35 +253,50 @@ class DashboardActivity : BaseActivity() {
         val container = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(32, 8, 32, 8)
+            setPadding(28, 8, 28, 12)
         }
 
         val instruction = TextView(this).apply {
-            text = "QR code ko doosre mobile se scan kijiye\n\naap directly payment page par pahunch jayenge."
+            text = "Renew your subscription in just a few steps"
+            gravity = Gravity.CENTER
+            textSize = 18f
+            setTextColor(Color.rgb(30, 30, 30))
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            setPadding(0, 4, 0, 10)
+        }
+
+        val steps = TextView(this).apply {
+            text = "1. Open your phone's camera.\n2. Point the camera at the QR code below.\n3. Tap the link that appears on your phone.\n4. Follow the instructions on the payment page to renew your subscription."
             gravity = Gravity.CENTER
             textSize = 15f
             setTextColor(Color.DKGRAY)
+            setLineSpacing(2f, 1.05f)
+            setPadding(8, 0, 8, 10)
         }
 
         val imageView = ImageView(this).apply {
             setImageBitmap(qrBitmap)
             adjustViewBounds = true
-            setPadding(8, 20, 8, 20)
+            setPadding(8, 8, 8, 12)
+            contentDescription = "QR code to open the subscription payment page"
         }
 
-        val destination = TextView(this).apply {
-            text = PAYMENT_URL
+        val scanHint = TextView(this).apply {
+            text = "📱 Scan this code with another phone to open the payment page."
             gravity = Gravity.CENTER
-            textSize = 12f
-            setTextColor(Color.GRAY)
+            textSize = 14f
+            setTextColor(Color.rgb(55, 55, 55))
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            setPadding(8, 2, 8, 8)
         }
 
         container.addView(instruction)
+        container.addView(steps)
         container.addView(imageView, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT,
             LinearLayout.LayoutParams.WRAP_CONTENT
         ))
-        container.addView(destination)
+        container.addView(scanHint)
 
         AlertDialog.Builder(this)
             .setTitle("Renew Subscription")
