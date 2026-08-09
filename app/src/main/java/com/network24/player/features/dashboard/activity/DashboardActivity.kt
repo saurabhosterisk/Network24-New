@@ -94,9 +94,7 @@ class DashboardActivity : BaseActivity() {
     private fun askNotificationPermissionIfNeeded() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             val granted = ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
-            if (!granted) {
-                ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), REQ_POST_NOTIFICATIONS)
-            }
+            if (!granted) ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), REQ_POST_NOTIFICATIONS)
         }
     }
 
@@ -151,13 +149,12 @@ class DashboardActivity : BaseActivity() {
                     materialCard.strokeWidth = focusedStroke
                     materialCard.strokeColor = focusStroke
                     materialCard.cardElevation = focusedElevation
-                    materialCard.animate().scaleX(1.018f).scaleY(1.018f).setDuration(120).start()
+                    // Do not scale the card: scaling was causing the focused card to be clipped at the screen edges.
                 } else {
                     materialCard.setCardBackgroundColor(normalColor)
                     materialCard.strokeWidth = 0
                     materialCard.strokeColor = Color.TRANSPARENT
                     materialCard.cardElevation = normalElevation
-                    materialCard.animate().scaleX(1f).scaleY(1f).setDuration(100).start()
                 }
             }
         }
