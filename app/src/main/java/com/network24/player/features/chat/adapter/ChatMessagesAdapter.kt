@@ -13,7 +13,8 @@ import java.util.Locale
 import android.text.method.ScrollingMovementMethod
 
 class ChatMessagesAdapter(
-    private val mySenderId: String
+    private val mySenderId: String,
+    private val onReply: (ChatMessage) -> Unit = {}
 ) : RecyclerView.Adapter<ChatMessagesAdapter.VH>() {
 
     private val items = mutableListOf<ChatMessage>()
@@ -36,7 +37,7 @@ class ChatMessagesAdapter(
             R.layout.item_chat_message_left
         }
         val v = LayoutInflater.from(parent.context).inflate(layout, parent, false)
-        return VH(v)
+        return VH(v, onReply)
     }
 
     override fun onBindViewHolder(holder: VH, position: Int) {
@@ -45,31 +46,42 @@ class ChatMessagesAdapter(
 
     override fun getItemCount(): Int = items.size
 
-    class VH(itemView: View) : RecyclerView.ViewHolder(itemView) {
+    class VH(
+        itemView: View,
+        private val onReply: (ChatMessage) -> Unit
+    ) : RecyclerView.ViewHolder(itemView) {
 
         private val tvSender: TextView = itemView.findViewById(R.id.tvSender)
         private val tvText: TextView = itemView.findViewById(R.id.tvText)
         private val tvTime: TextView = itemView.findViewById(R.id.tvTime)
+        private val tvReplyPreview: TextView = itemView.findViewById(R.id.tvReplyPreview)
         private val tvUserIcon: TextView? = itemView.findViewById<View?>(R.id.tvUserIcon) as? TextView
 
         fun bind(m: ChatMessage, mySenderId: String) {
             val isMine = m.senderId.isNotBlank() && m.senderId == mySenderId
-            tvSender.text = if (isMine) {
-                "You"
-            } else {
-                m.senderName.ifBlank { "Unknown" }
-            }
+            tvSender.text = if (isMine) "You" else m.senderName.ifBlank { "Unknown" }
             tvText.text = m.text
             tvTime.text = formatLocalTime(m.ts)
             tvUserIcon?.text = "👤"
-
-            // NAYA FIX: Lamba message TV remote se scroll hone dene ke liye
             tvText.movementMethod = ScrollingMovementMethod.getInstance()
+
+            if (!m.replyToMessageId.isNullOrBlank()) {
+                val name = m.replyToSenderName?.ifBlank { "Unknown" } ?: "Unknown"
+                val original = m.replyToText.orEmpty()
+                tvReplyPreview.text = "↩ Reply to $name: ${original.take(120)}"
+                tvReplyPreview.visibility = View.VISIBLE
+            } else {
+                tvReplyPreview.visibility = View.GONE
+            }
+
+            tvText.setOnClickListener {
+                onReply(m)
+            }
         }
 
         private fun formatLocalTime(ts: Timestamp?): String {
             if (ts == null) return ""
-            val date = ts.toDate() // formats in device local timezone
+            val date = ts.toDate()
             val sdf = SimpleDateFormat("dd/MM/yyyy, HH:mm", Locale.getDefault())
             return sdf.format(date)
         }
