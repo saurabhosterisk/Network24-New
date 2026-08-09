@@ -12,6 +12,7 @@ import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -21,6 +22,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.drawerlayout.widget.DrawerLayout
 import com.google.android.material.internal.NavigationMenuView
+import com.google.android.material.card.MaterialCardView
 import com.network24.player.R
 import com.network24.player.core.base.BaseActivity
 import com.network24.player.core.preferences.PreferenceManager
@@ -84,6 +86,7 @@ class DashboardActivity : BaseActivity() {
         binding.cardLiveTv.post { binding.cardLiveTv.requestFocus() }
         setupDrawerAndMenu()
         setClickListeners()
+        setupDashboardCardInteractions()
         handler.post(clockRunnable)
         syncInitialData(forceRefresh = false)
     }
@@ -137,6 +140,79 @@ class DashboardActivity : BaseActivity() {
             binding.txtExpiry.text = "--"
             binding.txtRemaining.text = "--"
             binding.btnRenew.visibility = View.GONE
+        }
+    }
+
+    private fun setupDashboardCardInteractions() {
+        val cards = listOf(
+            binding.cardLiveTv,
+            binding.cardFavorites,
+            binding.cardNotification,
+            binding.cardSupport,
+            binding.cardSettings,
+            binding.cardLiveEvents
+        )
+
+        val normalColor = ContextCompat.getColor(this, R.color.card)
+        val focusedColor = Color.rgb(38, 48, 68)
+        val focusStroke = ContextCompat.getColor(this, R.color.primary_light)
+        val density = resources.displayMetrics.density
+        val normalElevation = 3f * density
+        val focusedElevation = 8f * density
+        val normalStroke = 0
+        val focusedStroke = (3f * density).toInt()
+
+        cards.forEach { card ->
+            card.isFocusable = true
+            card.isClickable = true
+            card.strokeWidth = normalStroke
+            card.strokeColor = Color.TRANSPARENT
+            card.cardElevation = normalElevation
+
+            enlargeDashboardIcons(card, 42)
+
+            card.setOnFocusChangeListener { view, hasFocus ->
+                val materialCard = view as MaterialCardView
+                if (hasFocus) {
+                    materialCard.setCardBackgroundColor(focusedColor)
+                    materialCard.strokeWidth = focusedStroke
+                    materialCard.strokeColor = focusStroke
+                    materialCard.cardElevation = focusedElevation
+                    materialCard.animate()
+                        .scaleX(1.018f)
+                        .scaleY(1.018f)
+                        .setDuration(120)
+                        .start()
+                } else {
+                    materialCard.setCardBackgroundColor(normalColor)
+                    materialCard.strokeWidth = normalStroke
+                    materialCard.strokeColor = Color.TRANSPARENT
+                    materialCard.cardElevation = normalElevation
+                    materialCard.animate()
+                        .scaleX(1f)
+                        .scaleY(1f)
+                        .setDuration(100)
+                        .start()
+                }
+            }
+        }
+    }
+
+    private fun enlargeDashboardIcons(card: ViewGroup, sizeDp: Int) {
+        val sizePx = (sizeDp * resources.displayMetrics.density).toInt()
+        for (index in 0 until card.childCount) {
+            val child = card.getChildAt(index)
+            when (child) {
+                is ImageView -> {
+                    child.layoutParams = child.layoutParams.apply {
+                        width = sizePx
+                        height = sizePx
+                    }
+                    child.scaleType = ImageView.ScaleType.CENTER_INSIDE
+                    child.requestLayout()
+                }
+                is ViewGroup -> enlargeDashboardIcons(child, sizeDp)
+            }
         }
     }
 
