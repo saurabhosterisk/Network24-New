@@ -1,0 +1,44 @@
+﻿# Android Studio
+*.iml
+.idea/
+
+# Gradle
+.gradle/
+build/
+*/build/
+
+# Local configuration
+local.properties
+
+# Android generated
+captures/
+.externalNativeBuild/
+.cxx/
+
+# APK and AAB
+*.apk
+*.aab
+
+# Signing files
+*.jks
+*.keystore
+*.p12
+*.pem
+
+# Environment files
+.env
+.env.*
+
+# Firebase Functions
+functions/node_modules/
+functions/lib/
+functions/.firebase/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.log
+*.tmp
+

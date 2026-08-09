@@ -1,0 +1,172 @@
+package com.network24.player.features.live.repository
+
+import android.content.Context
+import com.network24.player.core.cache.memory.CacheKeys as MemKeys
+import com.network24.player.core.cache.memory.CacheTtl
+import com.network24.player.core.cache.memory.MemoryCache
+import com.network24.player.core.database.DatabaseProvider
+import com.network24.player.core.database.entity.CategoryType
+import com.network24.player.core.database.mapper.toLiveCategory
+import com.network24.player.core.database.mapper.toLiveChannel
+import com.network24.player.core.database.mapper.toEpgListing
+import com.network24.player.core.sync.SyncManager
+import com.network24.player.core.sync.SyncResult
+import com.network24.player.features.live.models.LiveCategory
+import com.network24.player.features.live.models.LiveChannel
+import com.network24.player.features.live.models.ShortEPGResponse
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+
+class LiveRepository(private val context: Context) {
+
+    private val db = DatabaseProvider.get(context)
+    private val sync = SyncManager(context)
+
+    fun syncAllData(
+        server: String,
+        username: String,
+        password: String,
+        callback: SyncCallback
+    ) {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val r1 = sync.syncLiveCategories(force = true)
+                if (r1 is SyncResult.Error) throw Exception(r1.message)
+
+                val r2 = sync.syncLiveChannelsAll(force = true)
+                if (r2 is SyncResult.Error) throw Exception(r2.message)
+
+                // A full sync changes category-specific channel lists too.
+                // Clear the whole in-memory cache so no stale category data survives.
+                MemoryCache.clearAll()
+
+                withContext(Dispatchers.Main) { callback.onSuccess() }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) { callback.onError(e.message ?: "Unknown Error Occurred") }
+            }
+        }
+    }
+
+    suspend fun getCategories(
+        server: String,
+        username: String,
+        password: String,
+        forceRefresh: Boolean = false
+    ): List<LiveCategory> {
+        MemoryCache.get<List<LiveCategory>>(MemKeys.LIVE_CATEGORIES)?.let { return it }
+
+        val roomList = db.categoryDao().getByType(CategoryType.LIVE).map { it.toLiveCategory() }
+        if (roomList.isNotEmpty() && !forceRefresh) {
+            MemoryCache.put(MemKeys.LIVE_CATEGORIES, roomList, CacheTtl.CATEGORIES_MS)
+            return roomList
+        }
+
+        val syncResult = sync.syncLiveCategories(force = true)
+        if (syncResult is SyncResult.Error) {
+            if (roomList.isNotEmpty()) return roomList
+            throw Exception(syncResult.message)
+        }
+
+        val fresh = db.categoryDao().getByType(CategoryType.LIVE).map { it.toLiveCategory() }
+        MemoryCache.put(MemKeys.LIVE_CATEGORIES, fresh, CacheTtl.CATEGORIES_MS)
+        return fresh
+    }
+
+    suspend fun getChannels(
+        server: String,
+        username: String,
+        password: String,
+        categoryId: String,
+        forceRefresh: Boolean = false
+    ): List<LiveChannel> {
+        val safeCategoryId = if (categoryId.isBlank()) "all" else categoryId
+        val memKey = MemKeys.liveChannels(safeCategoryId)
+
+        MemoryCache.get<List<LiveChannel>>(memKey)?.let { return it }
+
+        val roomList = if (safeCategoryId == "all") {
+            db.channelDao().getAll().map { it.toLiveChannel() }
+        } else {
+            db.channelDao().getByCategory(safeCategoryId).map { it.toLiveChannel() }
+        }
+
+        if (roomList.isNotEmpty() && !forceRefresh) {
+            MemoryCache.put(memKey, roomList, CacheTtl.CHANNELS_MS)
+            return roomList
+        }
+
+        val syncResult = sync.syncLiveChannelsAll(force = true)
+        if (syncResult is SyncResult.Error) {
+            if (roomList.isNotEmpty()) return roomList
+            throw Exception(syncResult.message)
+        }
+
+        val fresh = if (safeCategoryId == "all") {
+            db.channelDao().getAll().map { it.toLiveChannel() }
+        } else {
+            db.channelDao().getByCategory(safeCategoryId).map { it.toLiveChannel() }
+        }
+
+        MemoryCache.put(memKey, fresh, CacheTtl.CHANNELS_MS)
+        return fresh
+    }
+
+    suspend fun getShortEPG(
+        server: String,
+        username: String,
+        password: String,
+        streamId: Int
+    ): ShortEPGResponse {
+        val memKey = MemKeys.epg(streamId)
+
+        MemoryCache.get<ShortEPGResponse>(memKey)?.let { return it }
+
+        val roomListings = db.epgDao().getByStream(streamId)
+        if (roomListings.isNotEmpty()) {
+            val epg = ShortEPGResponse(epg_listings = roomListings.map { it.toEpgListing() })
+            MemoryCache.put(memKey, epg, CacheTtl.EPG_MS)
+            return epg
+        }
+
+        val syncResult = sync.syncShortEpg(streamId = streamId, force = true)
+        if (syncResult is SyncResult.Error) throw Exception(syncResult.message)
+
+        val freshListings = db.epgDao().getByStream(streamId)
+        val fresh = ShortEPGResponse(epg_listings = freshListings.map { it.toEpgListing() })
+        MemoryCache.put(memKey, fresh, CacheTtl.EPG_MS)
+        return fresh
+    }
+
+    /**
+     * Gets "Now Playing" and "Next Playing" EPG data for a specific channel using the bulk XMLTV data.
+     * Hits the memory cache first to prevent UI stuttering in RecyclerViews.
+     */
+    suspend fun getNowNextEpg(epgChannelId: String): Pair<com.network24.player.core.database.entity.EpgEntity?, com.network24.player.core.database.entity.EpgEntity?> {
+        // If there's no mapping ID, return empty
+        if (epgChannelId.isBlank()) return Pair(null, null)
+
+        val memKey = "epg_now_next_$epgChannelId"
+
+        // 1. Try Memory Cache (Fastest)
+        MemoryCache.get<Pair<com.network24.player.core.database.entity.EpgEntity?, com.network24.player.core.database.entity.EpgEntity?>>(memKey)?.let {
+            return it
+        }
+
+        // 2. Fetch from Room
+        val now = System.currentTimeMillis()
+        val nowEntity = db.epgDao().getNowByEpgChannelId(epgChannelId, now)
+        val nextEntity = db.epgDao().getNextByEpgChannelId(epgChannelId, now)
+
+        // 3. Create the Pair directly from Entities
+        val result = Pair(nowEntity, nextEntity)
+
+        // 4. Save to Memory Cache (Using existing CacheTtl.EPG_MS)
+        MemoryCache.put(memKey, result, CacheTtl.EPG_MS)
+
+        return result
+    }
+
+}

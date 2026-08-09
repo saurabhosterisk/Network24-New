@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<com.google.android.material.card.MaterialCardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+
+    android:id="@+id/cardRoot"
+
+    android:layout_width="match_parent"
+    android:layout_height="72dp"
+
+    android:layout_marginBottom="6dp"
+
+    android:focusable="true"
+    android:focusableInTouchMode="false"
+    android:descendantFocusability="blocksDescendants"
+    android:clickable="true"
+    android:background="@drawable/bg_channel_focus"
+    app:cardBackgroundColor="@android:color/transparent"
+    app:cardCornerRadius="10dp"
+    app:cardElevation="0dp"
+    app:strokeWidth="0dp">
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+
+        android:paddingStart="10dp"
+        android:paddingEnd="10dp">
+
+        <!-- Selected indicator -->
+
+        <View
+            android:id="@+id/viewIndicator"
+
+            android:layout_width="4dp"
+            android:layout_height="34dp"
+
+            android:background="#3D8BFF"
+
+            android:visibility="gone"
+
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent"/>
+
+        <!-- Channel Logo -->
+
+        <ImageView
+            android:id="@+id/imgLogo"
+
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+
+            android:layout_marginStart="12dp"
+
+            android:adjustViewBounds="true"
+            android:scaleType="fitCenter"
+
+            android:src="@drawable/app_logo"
+
+            app:layout_constraintStart_toEndOf="@id/viewIndicator"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"/>
+
+        <!-- Channel Number -->
+
+
+
+        <!-- Channel Name -->
+
+        <TextView
+            android:id="@+id/txtName"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+
+            android:layout_marginStart="12dp"
+            android:layout_marginEnd="8dp"
+
+            android:ellipsize="end"
+            android:maxLines="1"
+
+            android:text="USA | AE"
+            android:textColor="@android:color/white"
+            android:textStyle="bold"
+            android:textSize="15sp"
+
+            app:layout_constraintStart_toEndOf="@id/imgLogo"
+            app:layout_constraintEnd_toStartOf="@id/imgPlaying"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"/>
+
+            <ImageView
+            android:id="@+id/imgFavorite"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:src="@drawable/ic_favorite"
+            app:tint="#BB86FC"
+            android:visibility="gone"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toStartOf="@id/imgPlaying"
+            android:layout_marginEnd="12dp"/>
+
+        <!-- Playing Icon -->
+
+        <ImageView
+            android:id="@+id/imgPlaying"
+
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+
+            android:visibility="gone"
+
+            android:src="@drawable/ic_play"
+
+            android:tint="#3D8BFF"
+
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"/>
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+</com.google.android.material.card.MaterialCardView>

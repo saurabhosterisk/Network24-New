@@ -1,0 +1,403 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.drawerlayout.widget.DrawerLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/drawerLayout"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <!-- MAIN CONTENT ROOT -->
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/bg_dashboard">
+
+        <!-- ========================= -->
+        <!-- Header -->
+        <!-- ========================= -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/headerCard"
+            android:layout_width="0dp"
+            android:layout_height="74dp"
+            android:layout_marginStart="12dp"
+            android:layout_marginTop="12dp"
+            android:layout_marginEnd="12dp"
+            app:cardBackgroundColor="@color/card"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="2dp"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent">
+
+            <androidx.constraintlayout.widget.ConstraintLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent">
+
+                <!-- Back Button -->
+                <ImageButton
+                    android:id="@+id/btnBack"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:layout_marginStart="12dp"
+                    android:background="@android:color/transparent"
+                    android:src="@drawable/ic_back"
+                    app:tint="@android:color/white"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintBottom_toBottomOf="parent"/>
+
+                <!-- Category Title -->
+                <TextView
+                    android:id="@+id/txtCategoryName"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="12dp"
+                    android:layout_marginEnd="12dp"
+                    android:text="USA ENTERTAINMENT"
+                    android:textColor="@android:color/white"
+                    android:textStyle="bold"
+                    android:textSize="18sp"
+                    app:layout_constraintStart_toEndOf="@id/btnBack"
+                    app:layout_constraintEnd_toStartOf="@id/searchLayout"
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintBottom_toBottomOf="parent"/>
+
+                <!-- Search Box -->
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/searchLayout"
+                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+                    android:layout_width="320dp"
+                    android:layout_height="54dp"
+                    android:layout_marginEnd="12dp"
+                    app:startIconDrawable="@android:drawable/ic_menu_search"
+                    app:boxBackgroundColor="@color/card"
+                    app:boxCornerRadiusTopStart="16dp"
+                    app:boxCornerRadiusTopEnd="16dp"
+                    app:boxCornerRadiusBottomStart="16dp"
+                    app:boxCornerRadiusBottomEnd="16dp"
+                    app:layout_constraintEnd_toStartOf="@id/btnMore"
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintBottom_toBottomOf="parent">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/edtSearch"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="Search Channels"
+                        android:textColor="@android:color/white"
+                        android:textColorHint="#80FFFFFF"
+                        android:singleLine="true"
+                        android:maxLines="1"
+                        android:inputType="text"
+                        android:imeOptions="actionSearch|flagNoExtractUi"/>
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <!-- 3-dots Menu Button -->
+                <ImageView
+                    android:id="@+id/btnMore"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:layout_marginEnd="12dp"
+                    android:src="@drawable/ic_more_vert"
+                    app:tint="@android:color/white"
+                    android:focusable="true"
+                    android:clickable="true"
+                    android:padding="6dp"
+                    android:background="@drawable/bg_more_focus"
+                    android:foreground="?attr/selectableItemBackgroundBorderless"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintBottom_toBottomOf="parent"/>
+
+            </androidx.constraintlayout.widget.ConstraintLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- ========================= -->
+        <!-- Guidelines -->
+        <!-- ========================= -->
+        <androidx.constraintlayout.widget.Guideline
+            android:id="@+id/guideVertical"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            app:layout_constraintGuide_percent="0.35"/>
+
+        <androidx.constraintlayout.widget.Guideline
+            android:id="@+id/guideHorizontal"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            app:layout_constraintGuide_percent="0.80"/>
+
+        <!-- ========================= -->
+        <!-- Left Panel (Channel List) -->
+        <!-- ========================= -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardChannels"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_marginStart="12dp"
+            android:layout_marginTop="12dp"
+            android:layout_marginEnd="6dp"
+            android:layout_marginBottom="12dp"
+            app:cardBackgroundColor="@color/card"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="2dp"
+            app:layout_constraintTop_toBottomOf="@id/headerCard"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toStartOf="@id/guideVertical">
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rvChannels"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:focusable="false"
+                android:focusableInTouchMode="false"
+                android:descendantFocusability="afterDescendants"
+                android:padding="8dp"/>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- ========================= -->
+        <!-- Player Card -->
+        <!-- ========================= -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardPlayer"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_marginStart="6dp"
+            android:layout_marginTop="12dp"
+            android:layout_marginEnd="12dp"
+            android:layout_marginBottom="6dp"
+            app:cardBackgroundColor="@color/card"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="2dp"
+            app:layout_constraintTop_toBottomOf="@id/headerCard"
+            app:layout_constraintBottom_toTopOf="@id/guideHorizontal"
+            app:layout_constraintStart_toStartOf="@id/guideVertical"
+            app:layout_constraintEnd_toEndOf="parent">
+
+            <androidx.constraintlayout.widget.ConstraintLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent">
+
+                <androidx.media3.ui.PlayerView
+                    android:id="@+id/playerView"
+                    android:layout_width="0dp"
+                    android:layout_height="0dp"
+                    android:focusable="false"
+                    android:background="@android:color/black"
+                    app:show_buffering="when_playing"
+                    app:use_controller="false"
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintBottom_toBottomOf="parent"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintEnd_toEndOf="parent"/>
+
+                <!-- 🔥 Updated Error TextView jo ekdum center me aayega -->
+                <TextView
+                    android:id="@+id/txtPlayerError"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    app:layout_constraintTop_toTopOf="@+id/playerView"
+                    app:layout_constraintBottom_toBottomOf="@+id/playerView"
+                    app:layout_constraintStart_toStartOf="@+id/playerView"
+                    app:layout_constraintEnd_toEndOf="@+id/playerView"
+
+                    android:gravity="center"
+                    android:text="Sorry, This video can not be played.\nPlease try again or pick another video."
+                    android:textColor="@android:color/white"
+                    android:textSize="14sp"
+                    android:background="#99000000"
+                    android:padding="12dp"
+                    android:visibility="gone" />
+                <Button
+                    android:id="@+id/btnReportChannel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:backgroundTint="#D32F2F"
+                    android:text="Report Channel"
+                    android:textColor="@android:color/white"
+                    android:visibility="gone"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toBottomOf="@id/txtPlayerError" />
+
+
+                <ProgressBar
+                    android:id="@+id/progressLoading"
+                    android:layout_width="50dp"
+                    android:layout_height="50dp"
+                    android:visibility="gone"
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintBottom_toBottomOf="parent"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintEnd_toEndOf="parent"/>
+
+                <ImageButton
+                    android:id="@+id/btnFullscreen"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:layout_margin="12dp"
+                    android:background="@drawable/bg_more_focus"
+                    android:padding="8dp"
+                    android:src="@drawable/ic_fullscreen"
+                    app:tint="@android:color/white"
+                    android:visibility="gone"
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintEnd_toEndOf="parent"/>
+
+                <LinearLayout
+                    android:id="@+id/layoutOverlay"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="12dp"
+                    android:orientation="vertical"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintBottom_toBottomOf="parent">
+
+                    <TextView
+                        android:id="@+id/txtOverlayChannel"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="AE HD"
+                        android:textColor="@android:color/white"
+                        android:textStyle="bold"
+                        android:textSize="18sp"/>
+
+                    <TextView
+                        android:id="@+id/txtOverlayProgram"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="The First 48"
+                        android:textColor="#DDFFFFFF"
+                        android:textSize="14sp"/>
+                </LinearLayout>
+            </androidx.constraintlayout.widget.ConstraintLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- ========================= -->
+        <!-- EPG Card -->
+        <!-- ========================= -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardEpg"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_marginStart="6dp"
+            android:layout_marginTop="6dp"
+            android:layout_marginEnd="12dp"
+            android:layout_marginBottom="12dp"
+            app:cardBackgroundColor="@color/card"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="2dp"
+            app:layout_constraintTop_toBottomOf="@id/guideHorizontal"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="@id/guideVertical"
+            app:layout_constraintEnd_toEndOf="parent">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:orientation="vertical"
+                android:gravity="center_vertical"
+                android:padding="12dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <!-- NOW -->
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="NOW"
+                            android:textColor="#64B5F6"
+                            android:textStyle="bold"
+                            android:textSize="10sp" />
+
+                        <TextView
+                            android:id="@+id/txtNowTitle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="1dp"
+                            android:ellipsize="end"
+                            android:maxLines="1"
+                            android:text="The First 48"
+                            android:textColor="@android:color/white"
+                            android:textStyle="bold"
+                            android:textSize="13sp" />
+
+                        <TextView
+                            android:id="@+id/txtNowTime"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="08:00 PM - 09:00 PM"
+                            android:textColor="#9E9E9E"
+                            android:textSize="10sp" />
+                    </LinearLayout>
+
+                    <!-- NEXT -->
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="12dp"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="NEXT"
+                            android:textColor="#81C784"
+                            android:textStyle="bold"
+                            android:textSize="10sp" />
+
+                        <TextView
+                            android:id="@+id/txtNextTitle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="1dp"
+                            android:ellipsize="end"
+                            android:maxLines="1"
+                            android:text="Court Cam"
+                            android:textColor="@android:color/white"
+                            android:textStyle="bold"
+                            android:textSize="13sp" />
+
+                        <TextView
+                            android:id="@+id/txtNextTime"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="09:00 PM - 10:00 PM"
+                            android:textColor="#9E9E9E"
+                            android:textSize="10sp" />
+                    </LinearLayout>
+                </LinearLayout>
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+    <!-- ========================= -->
+    <!-- Right Side Menu Drawer -->
+    <!-- ========================= -->
+    <com.google.android.material.navigation.NavigationView
+        android:id="@+id/rightNav"
+        android:layout_width="340dp"
+        android:layout_height="match_parent"
+        android:layout_gravity="end"
+        android:background="@android:color/white"
+        app:itemIconTint="@android:color/black"
+        app:itemTextColor="@android:color/black"
+        app:menu="@menu/menu_live_right_drawer" />
+
+</androidx.drawerlayout.widget.DrawerLayout>

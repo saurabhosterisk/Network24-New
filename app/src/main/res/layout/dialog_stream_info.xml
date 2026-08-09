@@ -1,0 +1,337 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#E6000000"
+    android:padding="18dp">
+
+    <!-- Header -->
+    <TextView
+        android:id="@+id/tvTitle"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:text="STREAM INFORMATION &amp; DIAGNOSTICS"
+        android:textColor="@android:color/white"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- 2-column grid guideline -->
+    <androidx.constraintlayout.widget.Guideline
+        android:id="@+id/guidelineMid"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        app:layout_constraintGuide_percent="0.5" />
+
+    <!-- STREAM (Top-Left) -->
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/cardStream"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_marginTop="12dp"
+        android:layout_marginEnd="8dp"
+        android:layout_marginBottom="8dp"
+        app:cardBackgroundColor="#1A1F2C"
+        app:cardCornerRadius="14dp"
+        app:strokeColor="#2A3245"
+        app:strokeWidth="1dp"
+        app:layout_constraintTop_toBottomOf="@id/tvTitle"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/guidelineMid"
+        app:layout_constraintBottom_toTopOf="@id/cardVideoAudio">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="HEALTH"
+                android:textStyle="bold"
+                android:textSize="16sp"
+                android:textColor="#7FB3FF" />
+
+            <TableLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:stretchColumns="1">
+
+                <TableRow>
+                    <TextView
+                        android:text="Health Score : "
+                        android:textStyle="bold"
+                        android:textColor="#A7B0C0" />
+                    <TextView
+                        android:id="@+id/tvHealthScore"
+                        android:text="—"
+                        android:textColor="@android:color/white"
+                        android:maxLines="2"
+                        android:textSize="12sp" />
+                </TableRow>
+
+                <TableRow>
+                    <TextView
+                        android:text="Quality : "
+                        android:textStyle="bold"
+                        android:textColor="#A7B0C0" />
+                    <TextView
+                        android:id="@+id/tvHealthLabel"
+                        android:text="—"
+                        android:textColor="@android:color/white" />
+                </TableRow>
+
+            </TableLayout>
+
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+
+    <!-- PLAYBACK (Top-Right) -->
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/cardPlayback"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_marginTop="12dp"
+        android:layout_marginStart="8dp"
+        android:layout_marginBottom="8dp"
+        app:cardBackgroundColor="#1A1F2C"
+        app:cardCornerRadius="14dp"
+        app:strokeColor="#2A3245"
+        app:strokeWidth="1dp"
+        app:layout_constraintTop_toBottomOf="@id/tvTitle"
+        app:layout_constraintStart_toEndOf="@id/guidelineMid"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toTopOf="@id/cardNetwork">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="PLAYBACK"
+                android:textStyle="bold"
+                android:textSize="16sp"
+                android:textColor="#7FB3FF" />
+
+            <TableLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:stretchColumns="1">
+
+                <TableRow>
+                    <TextView
+                        android:text="State : "
+                        android:textStyle="bold"
+                        android:textColor="#A7B0C0" />
+                    <TextView
+                        android:id="@+id/tvPlayerState"
+                        android:text="—"
+                        android:textColor="@android:color/white" />
+                </TableRow>
+
+                <TableRow>
+                    <TextView
+                        android:text="Buffered : "
+                        android:textStyle="bold"
+                        android:textColor="#A7B0C0" />
+                    <TextView
+                        android:id="@+id/tvBufferedPercent"
+                        android:text="—"
+                        android:textColor="@android:color/white" />
+                </TableRow>
+
+            </TableLayout>
+
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+
+    <!-- VIDEO / AUDIO (Bottom-Left) -->
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/cardVideoAudio"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_marginEnd="8dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="10dp"
+        app:cardBackgroundColor="#1A1F2C"
+        app:cardCornerRadius="14dp"
+        app:strokeColor="#2A3245"
+        app:strokeWidth="1dp"
+        app:layout_constraintTop_toBottomOf="@id/cardStream"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/guidelineMid"
+        app:layout_constraintBottom_toTopOf="@id/bottomButtonsLayout">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="VIDEO / AUDIO"
+                android:textStyle="bold"
+                android:textSize="16sp"
+                android:textColor="#7FB3FF" />
+
+            <TableLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:stretchColumns="1">
+
+                <TableRow>
+                    <TextView
+                        android:text="Resolution : "
+                        android:textStyle="bold"
+                        android:textColor="#A7B0C0" />
+                    <TextView
+                        android:id="@+id/tvResolution"
+                        android:text="—"
+                        android:textColor="@android:color/white" />
+                </TableRow>
+
+
+
+                <TableRow>
+                    <TextView
+                        android:text="Video Codec : "
+                        android:textStyle="bold"
+                        android:textColor="#A7B0C0" />
+                    <TextView
+                        android:id="@+id/tvVideoCodec"
+                        android:text="—"
+                        android:textColor="@android:color/white" />
+                </TableRow>
+
+                <TableRow>
+                    <TextView
+                        android:text="Audio Codec : "
+                        android:textStyle="bold"
+                        android:textColor="#A7B0C0" />
+                    <TextView
+                        android:id="@+id/tvAudioCodec"
+                        android:text="—"
+                        android:textColor="@android:color/white" />
+                </TableRow>
+
+            </TableLayout>
+
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+
+    <!-- NETWORK / DIAGNOSIS + HEALTH (Bottom-Right) -->
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/cardNetwork"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_marginStart="8dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="10dp"
+        app:cardBackgroundColor="#1A1F2C"
+        app:cardCornerRadius="14dp"
+        app:strokeColor="#2A3245"
+        app:strokeWidth="1dp"
+        app:layout_constraintTop_toBottomOf="@id/cardPlayback"
+        app:layout_constraintStart_toEndOf="@id/guidelineMid"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toTopOf="@id/bottomButtonsLayout">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="NETWORK / DIAGNOSIS"
+                android:textStyle="bold"
+                android:textSize="16sp"
+                android:textColor="#7FB3FF" />
+
+            <TableLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:stretchColumns="1">
+
+                <TableRow>
+                    <TextView
+                        android:text="Download : "
+                        android:textStyle="bold"
+                        android:textColor="#A7B0C0" />
+                    <TextView
+                        android:id="@+id/tvDownloadSpeed"
+                        android:text="—"
+                        android:textColor="@android:color/white" />
+                </TableRow>
+
+                <TableRow>
+                    <TextView
+                        android:text="Required : "
+                        android:textStyle="bold"
+                        android:textColor="#A7B0C0" />
+                    <TextView
+                        android:id="@+id/tvRequiredSpeed"
+                        android:text="—"
+                        android:textColor="@android:color/white" />
+                </TableRow>
+
+                <TableRow>
+                    <TextView
+                        android:text="Network : "
+                        android:textStyle="bold"
+                        android:textColor="#A7B0C0" />
+                    <TextView
+                        android:id="@+id/tvNetworkType"
+                        android:text="—"
+                        android:textColor="@android:color/white" />
+                </TableRow>
+
+            </TableLayout>
+
+
+
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+
+    <!-- Bottom Buttons -->
+    <LinearLayout
+        android:id="@+id/bottomButtonsLayout"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:gravity="end"
+        android:orientation="horizontal"
+        android:paddingTop="12dp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent">
+
+        <Button
+            android:id="@+id/btnClose"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:text="CLOSE"
+            android:focusable="true" />
+
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

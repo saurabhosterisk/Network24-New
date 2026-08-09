@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:padding="14dp"
+    android:gravity="center_vertical"
+    android:background="?attr/selectableItemBackground"
+    android:focusable="true"
+    android:clickable="true">
+
+    <!-- 1. Emoji -->
+    <TextView
+        android:id="@+id/tvEmoji"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="💬"
+        android:textSize="18sp"/>
+
+    <!-- 2. Room ka naam (layout_weight="1" hone se yeh bachi hui saari jagah le lega) -->
+    <TextView
+        android:id="@+id/tvRoomName"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="10dp"
+        android:layout_weight="1"
+        android:text="General Chat"
+        android:textColor="#EAEFFB"
+        android:textSize="16sp"
+        android:textStyle="normal"/> <!-- Isko adapter se Bold karenge -->
+
+    <!-- 3. NEW Badge (Room name ke baad aayega) -->
+    <TextView
+        android:id="@+id/badgeUnreadNew"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="8dp"
+        android:background="@drawable/bg_badge_red"
+        android:paddingHorizontal="6dp"
+        android:paddingVertical="2dp"
+        android:text="NEW"
+        android:textColor="#FFFFFF"
+        android:textSize="10sp"
+        android:textStyle="bold"
+        android:visibility="gone" /> <!-- Default me hide rahega -->
+
+    <!-- 4. READ ONLY Tag (Sabse last me aayega) -->
+    <TextView
+        android:id="@+id/tvReadOnly"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="READ ONLY"
+        android:textColor="#FFB300"
+        android:textSize="12sp"
+        android:visibility="gone"/>
+
+</LinearLayout>

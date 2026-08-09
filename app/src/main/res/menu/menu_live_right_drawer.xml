@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item
+        android:id="@+id/action_home"
+        android:title="Home"
+        android:icon="@drawable/ic_home" />
+
+    <item
+        android:id="@+id/action_refresh_all"
+        android:title="Refresh Channels"
+        android:icon="@drawable/ic_refresh" />
+
+    <item
+        android:id="@+id/action_refresh_guide"
+        android:title="Refresh TV Guide"
+        android:icon="@drawable/ic_info" />
+
+    <item
+        android:id="@+id/action_settings"
+        android:title="Settings"
+        android:icon="@drawable/ic_settings" />
+
+    <item
+        android:id="@+id/action_logout"
+        android:title="Logout"
+        android:icon="@drawable/ic_logout" />
+
+</menu>

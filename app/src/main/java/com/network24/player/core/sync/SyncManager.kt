@@ -1,0 +1,298 @@
+package com.network24.player.core.sync
+
+import android.content.Context
+import com.network24.player.core.api.ApiClient
+import com.network24.player.core.database.DatabaseProvider
+import com.network24.player.core.database.entity.CategoryType
+import com.network24.player.core.database.entity.SyncMetaEntity
+import com.network24.player.core.database.mapper.toCategoryEntity
+import com.network24.player.core.database.mapper.toChannelEntity
+import com.network24.player.core.database.mapper.toEpgEntity
+import com.network24.player.core.preferences.PreferenceManager
+import com.network24.player.core.cache.memory.MemoryCache
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import android.util.Xml
+import com.network24.player.core.database.entity.EpgEntity
+import okhttp3.ResponseBody
+import org.xmlpull.v1.XmlPullParser
+import java.io.InputStream
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
+
+
+class SyncManager(private val context: Context) {
+
+    private val db = DatabaseProvider.get(context)
+
+    private fun baseUrl(server: String): String = server.trim().trimEnd('/') + "/"
+
+    suspend fun syncLiveCategories(force: Boolean = false): SyncResult = withContext(Dispatchers.IO) {
+        try {
+            val creds = PreferenceManager(context).getLoginCredentials()
+                ?: return@withContext SyncResult.Error("Missing login credentials")
+
+            val service = ApiClient.get(baseUrl(creds.server))
+            // If your ApiClient uses create(...) instead of get(...), use:
+            // val service = ApiClient.create(baseUrl(creds.server))
+
+            if (!force) {
+                // future: staleness policy using sync_meta
+                db.syncMetaDao().get(SyncKeys.LIVE_CATEGORIES)
+            }
+
+            val response = service.getLiveCategories(creds.username, creds.password)
+            if (!response.isSuccessful) {
+                return@withContext SyncResult.Error("Categories sync failed: HTTP ${response.code()}")
+            }
+
+            val categories = response.body().orEmpty()
+
+            val entities = categories.mapIndexed { index, api ->
+                api.toCategoryEntity(position = index)
+            }
+
+            db.categoryDao().clearByType(CategoryType.LIVE)
+            db.categoryDao().upsertAll(entities)
+
+            db.syncMetaDao().upsert(
+                SyncMetaEntity(
+                    key = SyncKeys.LIVE_CATEGORIES,
+                    lastSyncEpochMs = System.currentTimeMillis()
+                )
+            )
+
+            SyncResult.Success
+        } catch (t: Throwable) {
+            SyncResult.Error("Categories sync exception: ${t.message}", t)
+        }
+    }
+
+    suspend fun syncLiveChannelsAll(force: Boolean = false): SyncResult = withContext(Dispatchers.IO) {
+        try {
+            val creds = PreferenceManager(context).getLoginCredentials()
+                ?: return@withContext SyncResult.Error("Missing login credentials")
+
+            val service = ApiClient.get(baseUrl(creds.server))
+            // If your ApiClient uses create(...) instead of get(...), use:
+            // val service = ApiClient.create(baseUrl(creds.server))
+
+            if (!force) {
+                db.syncMetaDao().get(SyncKeys.LIVE_CHANNELS_ALL)
+            }
+
+            // Xtream: categoryId="" commonly returns all channels
+            val response = service.getLiveStreams(
+                username = creds.username,
+                password = creds.password,
+                categoryId = ""
+            )
+
+            if (!response.isSuccessful) {
+                return@withContext SyncResult.Error("Channels sync failed: HTTP ${response.code()}")
+            }
+
+            val channels = response.body().orEmpty()
+            val entities = channels
+                .filter { (it.stream_id ?: 0) != 0 }
+                .map { it.toChannelEntity() }
+
+            db.channelDao().clearAll()
+            db.channelDao().upsertAll(entities)
+
+            db.syncMetaDao().upsert(
+                SyncMetaEntity(
+                    key = SyncKeys.LIVE_CHANNELS_ALL,
+                    lastSyncEpochMs = System.currentTimeMillis()
+                )
+            )
+
+            SyncResult.Success
+        } catch (t: Throwable) {
+            SyncResult.Error("Channels sync exception: ${t.message}", t)
+        }
+    }
+
+    suspend fun syncShortEpg(streamId: Int, force: Boolean = false): SyncResult = withContext(Dispatchers.IO) {
+        try {
+            val creds = PreferenceManager(context).getLoginCredentials()
+                ?: return@withContext SyncResult.Error("Missing login credentials")
+
+            val service = ApiClient.get(baseUrl(creds.server))
+            // If your ApiClient uses create(...) instead of get(...), use:
+            // val service = ApiClient.create(baseUrl(creds.server))
+
+            if (!force) {
+                db.syncMetaDao().get(SyncKeys.epgKey(streamId))
+            }
+
+            val response = service.getShortEPG(
+                username = creds.username,
+                password = creds.password,
+                streamId = streamId
+            )
+
+            if (!response.isSuccessful) {
+                return@withContext SyncResult.Error("EPG sync failed: HTTP ${response.code()}")
+            }
+
+            val listings = response.body()?.epg_listings.orEmpty()
+            val entities = listings.map { it.toEpgEntity(streamId) }
+
+            db.epgDao().replaceForStream(streamId, entities)
+
+            db.syncMetaDao().upsert(
+                SyncMetaEntity(
+                    key = SyncKeys.epgKey(streamId),
+                    lastSyncEpochMs = System.currentTimeMillis()
+                )
+            )
+
+            SyncResult.Success
+        } catch (t: Throwable) {
+            SyncResult.Error("EPG sync exception: ${t.message}", t)
+        }
+    }
+
+    suspend fun syncFullEpg(force: Boolean = false): SyncResult = withContext(Dispatchers.IO) {
+        try {
+            val creds = PreferenceManager(context).getLoginCredentials()
+                ?: return@withContext SyncResult.Error("Missing login credentials")
+            val server = creds.server.trim().trimEnd('/') + "/"
+            val service = ApiClient.get(server)
+            // optional staleness check via sync_meta later (skip for now)
+
+            val response = service.getXmlTv(creds.username, creds.password)
+            if (!response.isSuccessful) {
+                return@withContext SyncResult.Error("XMLTV download failed: HTTP ${response.code()}")
+            }
+
+            val body: ResponseBody = response.body() ?: return@withContext SyncResult.Error("XMLTV empty body")
+
+            // Replace strategy (dev-friendly): clear and insert
+            db.epgDao().deleteAll()
+            body.byteStream().use { input ->
+                parseAndInsertXmlTv(input)
+            }
+            db.syncMetaDao().upsert(SyncMetaEntity(SyncKeys.FULL_EPG, System.currentTimeMillis()))
+
+            // --> CLEAR THE IN-MEMORY EPG CACHE SO UI RE-FETCHES <--
+            MemoryCache.clearAll()
+
+            SyncResult.Success
+        } catch (t: Throwable) {
+            SyncResult.Error("Full EPG sync failed: ${t.message}", t)
+        }
+    }
+
+
+    // -------------------------
+// Internal parser + batch insert
+// -------------------------
+    private suspend fun parseAndInsertXmlTv(input: InputStream) {
+        val parser = Xml.newPullParser()
+        parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false)
+        parser.setInput(input, null)
+
+        val batch = ArrayList<EpgEntity>(1000)
+
+        var event = parser.eventType
+        while (event != XmlPullParser.END_DOCUMENT) {
+            if (event == XmlPullParser.START_TAG && parser.name == "programme") {
+                val epgChannelId = parser.getAttributeValue(null, "channel") ?: ""
+                val startAttr = parser.getAttributeValue(null, "start")
+                val stopAttr = parser.getAttributeValue(null, "stop")
+
+                val startMs = parseXmlTvTimeToMs(startAttr)
+                val stopMs = parseXmlTvTimeToMs(stopAttr)
+
+                var title: String? = null
+                var desc: String? = null
+
+                // read inside <programme>...</programme>
+                while (true) {
+                    event = parser.next()
+                    if (event == XmlPullParser.START_TAG) {
+                        when (parser.name) {
+                            "title" -> title = readText(parser)
+                            "desc" -> desc = readText(parser)
+                        }
+                    } else if (event == XmlPullParser.END_TAG && parser.name == "programme") {
+                        break
+                    } else if (event == XmlPullParser.END_DOCUMENT) {
+                        break
+                    }
+                }
+
+                // Build stable-ish id: channel + start + stop
+                val id = "${epgChannelId}_${startMs}_${stopMs}"
+
+                // Store using your existing old keys
+                val entity = EpgEntity(
+                    id = id,
+                    streamId = 0, // unknown in XMLTV (we’ll query by epgChannelId)
+                    epgChannelId = epgChannelId,
+                    title = title,
+                    description = desc,
+                    start = startAttr,
+                    end = stopAttr,
+                    startTimestamp = if (startMs > 0) startMs else null,
+                    stopTimestamp = if (stopMs > 0) stopMs else null
+                )
+
+                // skip bad rows
+                if (epgChannelId.isNotBlank() && startMs > 0 && stopMs > 0) {
+                    batch.add(entity)
+                }
+
+                if (batch.size >= 1000) {
+                    db.epgDao().insertAll(batch)
+                    batch.clear()
+                }
+            }
+            event = parser.next()
+        }
+
+        if (batch.isNotEmpty()) {
+            db.epgDao().insertAll(batch)
+        }
+    }
+
+    private fun readText(parser: XmlPullParser): String {
+        // parser is at START_TAG; next() to TEXT then END_TAG
+        var result = ""
+        if (parser.next() == XmlPullParser.TEXT) {
+            result = parser.text ?: ""
+            parser.nextTag()
+        }
+        return result
+    }
+
+    /**
+     * XMLTV time example:\n
+     * 20250101153000 +0530\n
+     * We convert it to epoch millis.\n
+     * If parse fails returns 0.\n
+     */
+    private fun parseXmlTvTimeToMs(value: String?): Long {
+        if (value.isNullOrBlank()) return 0L
+
+        return try {
+            // XMLTV normally provides an explicit offset, e.g.
+            // "20260809153000 +0530". Parse it so EPG is not shifted
+            // by the device/provider timezone.
+            val normalized = value.trim()
+            val sdf = if (normalized.length >= 19) {
+                SimpleDateFormat("yyyyMMddHHmmss Z", Locale.US)
+            } else {
+                SimpleDateFormat("yyyyMMddHHmmss", Locale.US).apply {
+                    timeZone = TimeZone.getTimeZone("UTC")
+                }
+            }
+            sdf.parse(normalized)?.time ?: 0L
+        } catch (e: Exception) {
+            0L
+        }
+    }
+}

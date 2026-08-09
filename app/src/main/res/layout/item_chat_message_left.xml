@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:paddingStart="12dp"
+    android:paddingEnd="12dp"
+    android:paddingTop="8dp"
+    android:paddingBottom="8dp">
+    <!-- YAHAN SE MAIN NE focusable, clickable aur background HATA DIYE HAIN -->
+
+    <!-- User icon (left) -->
+    <TextView
+        android:id="@+id/tvUserIcon"
+        android:layout_width="36dp"
+        android:layout_height="36dp"
+        android:layout_marginEnd="12dp"
+        android:gravity="center"
+        android:text="👤"
+        android:textSize="16sp"
+        android:background="#151B2C"
+        android:textColor="@android:color/white"/>
+
+    <!-- Content (right of icon) -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <!-- Username + Time row -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/tvSender"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="username"
+                android:textStyle="bold"
+                android:textSize="13sp"
+                android:textColor="#B0BEC5"/>
+
+            <TextView
+                android:id="@+id/tvTime"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:text="03/08/2026, 21:56"
+                android:textSize="12sp"
+                android:textColor="#78909C"/>
+        </LinearLayout>
+
+        <!-- Message -->
+        <TextView
+            android:id="@+id/tvText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:text="message"
+            android:textSize="15sp"
+
+            android:maxHeight="500dp"
+            android:scrollbars="vertical"
+            android:focusable="true"
+            android:clickable="true"
+            android:isScrollContainer="true"
+            android:background="?attr/selectableItemBackground"
+            android:padding="4dp"
+
+            android:textColor="@android:color/white"
+            android:lineSpacingExtra="2dp"/>
+        <!-- MAIN HIGHLIGHT AUR FOCUS YAHAN SHIFT KAR DIYA HAI -->
+
+    </LinearLayout>
+</LinearLayout>
