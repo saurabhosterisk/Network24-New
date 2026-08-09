@@ -2,7 +2,6 @@ package com.network24.player.features.player.multiview
 
 import android.content.Context
 import androidx.annotation.OptIn
-import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -49,11 +48,9 @@ class MultiPlayerManager(
             .build()
             .apply {
                 playWhenReady = true
+                // Keep the audio renderer enabled. Only volume is controlled by
+                // setAudioFocus(), so the focused window can produce audio.
                 volume = 0f
-                trackSelectionParameters = trackSelectionParameters
-                    .buildUpon()
-                    .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true)
-                    .build()
 
                 addListener(object : Player.Listener {
                     override fun onPlaybackStateChanged(playbackState: Int) {
