@@ -256,22 +256,13 @@ class DashboardActivity : BaseActivity() {
             setPadding(28, 8, 28, 12)
         }
 
-        val instruction = TextView(this).apply {
-            text = "Renew your subscription in just a few steps"
-            gravity = Gravity.CENTER
-            textSize = 18f
-            setTextColor(Color.rgb(30, 30, 30))
-            setTypeface(typeface, android.graphics.Typeface.BOLD)
-            setPadding(0, 4, 0, 10)
-        }
-
         val steps = TextView(this).apply {
             text = "1. Open your phone's camera.\n2. Point the camera at the QR code below.\n3. Tap the link that appears on your phone.\n4. Follow the instructions on the payment page to renew your subscription."
             gravity = Gravity.CENTER
             textSize = 15f
             setTextColor(Color.DKGRAY)
             setLineSpacing(2f, 1.05f)
-            setPadding(8, 0, 8, 10)
+            setPadding(8, 4, 8, 10)
         }
 
         val imageView = ImageView(this).apply {
@@ -290,7 +281,6 @@ class DashboardActivity : BaseActivity() {
             setPadding(8, 2, 8, 8)
         }
 
-        container.addView(instruction)
         container.addView(steps)
         container.addView(imageView, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT,
