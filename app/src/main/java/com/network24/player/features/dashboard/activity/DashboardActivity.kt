@@ -8,6 +8,8 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.View
+import android.widget.ImageView
+import android.widget.TextView
 import android.widget.Toast
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -217,6 +219,12 @@ class DashboardActivity : BaseActivity() {
         binding.cardNotification.setOnClickListener {
             Toast.makeText(this, "Notifications", Toast.LENGTH_SHORT).show()
         }
+
+        // Live Chat card: update the label and icon while keeping the existing
+        // ChatHubActivity navigation unchanged.
+        val supportContent = binding.cardSupport.getChildAt(0) as? android.widget.LinearLayout
+        (supportContent?.getChildAt(0) as? ImageView)?.setImageResource(R.drawable.ic_live_chat)
+        (supportContent?.getChildAt(1) as? TextView)?.text = "Live Chat"
 
         binding.cardSupport.setOnClickListener {
             startActivity(Intent(this, ChatHubActivity::class.java))
