@@ -6,14 +6,10 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
-import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
-import androidx.media3.datasource.DataSource
-import com.network24.player.core.net.CountingDataSource
+import com.network24.player.core.net.StreamDataSourceFactory
 
 @OptIn(UnstableApi::class)
 object PlayerManager {
@@ -22,7 +18,6 @@ object PlayerManager {
     private var currentUrl: String? = null
     private var currentPlayerView: PlayerView? = null
 
-    // Session diagnostics. These are reset whenever a new stream starts.
     private var rebufferCount = 0
     private var bufferingStartedAtMs = 0L
     private var totalBufferingMs = 0L
@@ -30,35 +25,17 @@ object PlayerManager {
     private var lastPlaybackState = Player.STATE_IDLE
 
     private val loadControl = DefaultLoadControl.Builder()
-        .setBufferDurationsMs(
-            15000,
-            50000,
-            1000,
-            2000
-        ).build()
+        .setBufferDurationsMs(15000, 50000, 1000, 2000)
+        .build()
 
     fun getPlayer(context: Context): ExoPlayer {
         if (exoPlayer == null) {
-            val httpFactory = DefaultHttpDataSource.Factory()
-                .setUserAgent("N24PlayerPlayer")
-                .setAllowCrossProtocolRedirects(true)
-
-            val countingFactory = DataSource.Factory {
-                CountingDataSource(httpFactory.createDataSource())
-            }
-
-            val mediaSourceFactory = DefaultMediaSourceFactory(countingFactory)
-            val renderersFactory = DefaultRenderersFactory(context.applicationContext).apply {
-                setEnableDecoderFallback(true)
-                setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
-            }
-
-            exoPlayer = ExoPlayer.Builder(
+            val player = ExoPlayer.Builder(
                 context.applicationContext,
-                renderersFactory
+                StreamDataSourceFactory.createRenderersFactory(context)
             )
                 .setLoadControl(loadControl)
-                .setMediaSourceFactory(mediaSourceFactory)
+                .setMediaSourceFactory(StreamDataSourceFactory.createMediaSourceFactory())
                 .build()
                 .apply {
                     playWhenReady = true
@@ -91,6 +68,8 @@ object PlayerManager {
                         }
                     })
                 }
+
+            exoPlayer = player
         }
         return exoPlayer!!
     }
@@ -134,9 +113,6 @@ object PlayerManager {
     fun retryCurrent() {
         val player = exoPlayer ?: return
         if (currentUrl.isNullOrBlank()) return
-
-        // Keep the same MediaItem/source. Re-preparing the existing live source is
-        // less disruptive than stopping, clearing and rebuilding the stream URL.
         player.prepare()
         player.play()
     }
@@ -165,7 +141,6 @@ object PlayerManager {
 
     fun getExoPlayerOrNull(): ExoPlayer? = exoPlayer
     fun getCurrentUrlOrEmpty(): String = currentUrl ?: ""
-
     fun getRebufferCount(): Int = rebufferCount
 
     fun getTotalBufferingMs(): Long {
