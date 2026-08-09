@@ -57,10 +57,10 @@
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 
-    <com.google.android.material.card.MaterialCardView android:id="@+id/cardDiagnosis" android:layout_width="0dp" android:layout_height="0dp" android:layout_marginTop="6dp" android:layout_marginBottom="8dp" app:cardBackgroundColor="#1A1F2C" app:cardCornerRadius="12dp" app:strokeColor="#2A3245" app:strokeWidth="1dp" app:layout_constraintStart_toStartOf="parent" app:layout_constraintEnd_toEndOf="parent" app:layout_constraintTop_toBottomOf="@id/cardVideoAudio" app:layout_constraintBottom_toTopOf="@id/bottomButtonsLayout">
-        <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:padding="12dp">
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="DIAGNOSIS" android:textColor="#7FB3FF" android:textSize="15sp" android:textStyle="bold" />
-            <TextView android:id="@+id/tvDiagnosis" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="Checking stream health…" android:textColor="@android:color/white" android:textSize="14sp" android:maxLines="3" android:ellipsize="end" />
+    <com.google.android.material.card.MaterialCardView android:id="@+id/cardDiagnosis" android:layout_width="0dp" android:layout_height="72dp" android:layout_marginTop="6dp" android:layout_marginBottom="8dp" app:cardBackgroundColor="#1A1F2C" app:cardCornerRadius="12dp" app:strokeColor="#2A3245" app:strokeWidth="1dp" app:layout_constraintStart_toStartOf="parent" app:layout_constraintEnd_toEndOf="parent" app:layout_constraintTop_toBottomOf="@id/cardVideoAudio" app:layout_constraintBottom_toTopOf="@id/bottomButtonsLayout">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:padding="9dp">
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="DIAGNOSIS" android:textColor="#7FB3FF" android:textSize="14sp" android:textStyle="bold" />
+            <TextView android:id="@+id/tvDiagnosis" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="3dp" android:text="Checking stream health…" android:textColor="@android:color/white" android:textSize="13sp" android:maxLines="2" android:ellipsize="end" />
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 
