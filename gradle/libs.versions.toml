@@ -54,7 +54,6 @@ media3-exoplayer = { group = "androidx.media3", name = "media3-exoplayer", versi
 media3-ui = { group = "androidx.media3", name = "media3-ui", version.ref = "media3" }
 media3-common = { group = "androidx.media3", name = "media3-common", version.ref = "media3" }
 media3-exoplayer-hls = { group = "androidx.media3", name = "media3-exoplayer-hls", version.ref = "media3" }
-media3-decoder-ffmpeg = { group = "androidx.media3", name = "media3-decoder-ffmpeg", version.ref = "media3" }
 
 firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebase-bom" }
 firebase-firestore-ktx = { module = "com.google.firebase:firebase-firestore-ktx" }
