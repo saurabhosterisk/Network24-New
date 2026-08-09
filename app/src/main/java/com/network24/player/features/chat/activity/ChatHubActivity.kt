@@ -9,6 +9,7 @@ import android.os.Bundle
 import android.provider.Settings
 import android.view.KeyEvent
 import android.view.View
+import android.widget.EditText
 import android.widget.PopupWindow
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
@@ -64,9 +65,7 @@ class ChatHubActivity : BaseActivity() {
             mySenderId = senderId,
             onReply = { beginReply(it) },
             onMessageMenu = { showMessageActions(it) },
-            onReaction = { message, emoji ->
-                if (emoji == "__picker__") showReactionPicker(message) else toggleReaction(message, emoji)
-            }
+            onReaction = { message, emoji -> if (emoji == "__picker__") showReactionPicker(message) else toggleReaction(message, emoji) }
         )
         binding.rvMessages.layoutManager = LinearLayoutManager(this).apply { stackFromEnd = true }
         binding.rvMessages.adapter = messagesAdapter
@@ -87,31 +86,71 @@ class ChatHubActivity : BaseActivity() {
 
     private fun showReactionPicker(message: ChatMessage) {
         val emojis = arrayOf("👍", "❤️", "😂", "😮", "😢", "😡")
-        AlertDialog.Builder(this)
-            .setTitle("React to message")
-            .setItems(emojis) { _, which -> toggleReaction(message, emojis[which]) }
-            .show()
+        AlertDialog.Builder(this).setTitle("React to message").setItems(emojis) { _, which -> toggleReaction(message, emojis[which]) }.show()
     }
 
     private fun toggleReaction(message: ChatMessage, emoji: String) {
         val room = selectedRoom ?: return
-        repo.toggleReaction(room.id, message.id, emoji, senderId,
-            onOk = {},
-            onError = { Toast.makeText(this, "Reaction failed: ${it.message}", Toast.LENGTH_SHORT).show() })
+        repo.toggleReaction(room.id, message.id, emoji, senderId, {}, { Toast.makeText(this, "Reaction failed: ${it.message}", Toast.LENGTH_SHORT).show() })
     }
 
     private fun showMessageActions(message: ChatMessage) {
         val room = selectedRoom ?: return
-        val canReply = canSendToRoom(room.id, room.readOnly)
-        val actions = if (canReply) arrayOf("Reply", "Copy", "React", "Report") else arrayOf("Copy", "React", "Report")
-        AlertDialog.Builder(this).setTitle(message.senderName.ifBlank { "Message" }).setItems(actions) { _, which ->
+        val mine = message.senderId == senderId && !message.deleted
+        val actions = mutableListOf<String>()
+        if (!message.deleted && canSendToRoom(room.id, room.readOnly)) actions += "Reply"
+        actions += "Copy"
+        if (!message.deleted) actions += "React"
+        if (mine) { actions += "Edit"; actions += "Delete" }
+        if (!message.deleted) actions += "Report"
+        AlertDialog.Builder(this).setTitle(message.senderName.ifBlank { "Message" }).setItems(actions.toTypedArray()) { _, which ->
             when (actions[which]) {
                 "Reply" -> beginReply(message)
                 "Copy" -> copyMessage(message)
                 "React" -> showReactionPicker(message)
+                "Edit" -> editMessage(message)
+                "Delete" -> confirmDeleteMessage(message)
                 "Report" -> reportMessage(room, message)
             }
         }.show()
+    }
+
+    private fun editMessage(message: ChatMessage) {
+        val room = selectedRoom ?: return
+        if (message.senderId != senderId || message.deleted) return
+        val input = EditText(this).apply {
+            setText(message.text)
+            setSelection(text.length)
+            setSingleLine(false)
+            minLines = 2
+            maxLines = 5
+            setPadding(24, 12, 24, 12)
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Edit message")
+            .setView(input)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Save") { _, _ ->
+                val text = input.text?.toString()?.trim().orEmpty()
+                if (text.isEmpty()) { Toast.makeText(this, "Message cannot be empty", Toast.LENGTH_SHORT).show(); return@setPositiveButton }
+                repo.editMessage(room.id, message.id, text,
+                    onOk = { Toast.makeText(this, "Message updated", Toast.LENGTH_SHORT).show() },
+                    onError = { Toast.makeText(this, "Edit failed: ${it.message}", Toast.LENGTH_LONG).show() })
+            }.show()
+    }
+
+    private fun confirmDeleteMessage(message: ChatMessage) {
+        val room = selectedRoom ?: return
+        if (message.senderId != senderId || message.deleted) return
+        AlertDialog.Builder(this)
+            .setTitle("Delete message?")
+            .setMessage("This message will be replaced with a deleted-message notice.")
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Delete") { _, _ ->
+                repo.deleteMessage(room.id, message.id,
+                    onOk = { Toast.makeText(this, "Message deleted", Toast.LENGTH_SHORT).show() },
+                    onError = { Toast.makeText(this, "Delete failed: ${it.message}", Toast.LENGTH_LONG).show() })
+            }.show()
     }
 
     private fun copyMessage(message: ChatMessage) {
@@ -121,13 +160,12 @@ class ChatHubActivity : BaseActivity() {
     }
 
     private fun reportMessage(room: ChatRoom, message: ChatMessage) {
-        AlertDialog.Builder(this).setTitle("Report message?")
-            .setMessage("Report this message to the support team?")
-            .setNegativeButton("Cancel", null)
-            .setPositiveButton("Report") { _, _ -> repo.reportMessage(room.id, message, senderId, senderName,
-                onOk = { Toast.makeText(this, "Message reported", Toast.LENGTH_SHORT).show() },
-                onError = { Toast.makeText(this, "Report failed: ${it.message}", Toast.LENGTH_LONG).show() }) }
-            .show()
+        AlertDialog.Builder(this).setTitle("Report message?").setMessage("Report this message to the support team?")
+            .setNegativeButton("Cancel", null).setPositiveButton("Report") { _, _ ->
+                repo.reportMessage(room.id, message, senderId, senderName,
+                    { Toast.makeText(this, "Message reported", Toast.LENGTH_SHORT).show() },
+                    { Toast.makeText(this, "Report failed: ${it.message}", Toast.LENGTH_LONG).show() })
+            }.show()
     }
 
     private fun setupMentionAutocomplete() {
@@ -158,8 +196,7 @@ class ChatHubActivity : BaseActivity() {
     private fun showMentionPopup(names: List<String>) {
         val edit = binding.etMessage ?: return
         val recycler = (mentionPopup?.contentView as? RecyclerView) ?: RecyclerView(this).apply {
-            layoutManager = LinearLayoutManager(this@ChatHubActivity); overScrollMode = View.OVER_SCROLL_NEVER
-            setPadding(4, 4, 4, 4)
+            layoutManager = LinearLayoutManager(this@ChatHubActivity); overScrollMode = View.OVER_SCROLL_NEVER; setPadding(4, 4, 4, 4)
             background = GradientDrawable().apply { setColor(Color.parseColor("#151B2C")); cornerRadius = 12f }
             mentionAdapter = MentionAdapter { insertMention(it) }; adapter = mentionAdapter
         }
@@ -198,16 +235,14 @@ class ChatHubActivity : BaseActivity() {
         roomsAdapter.setUnread(room.id, false); roomMessagesListener?.remove()
         roomMessagesListener = repo.listenMessages(room.id, onUpdate = { list ->
             messagesAdapter.submit(list)
-            if (list.isNotEmpty()) { binding.rvMessages.scrollToPosition(list.size - 1); prefs.setChatLastSeen(room.id, list.last().ts?.toDate()?.time ?: System.currentTimeMillis()) }
-            else prefs.setChatLastSeen(room.id, System.currentTimeMillis())
+            if (list.isNotEmpty()) { binding.rvMessages.scrollToPosition(list.size - 1); prefs.setChatLastSeen(room.id, list.last().ts?.toDate()?.time ?: System.currentTimeMillis()) } else prefs.setChatLastSeen(room.id, System.currentTimeMillis())
             roomsAdapter.setUnread(room.id, false)
         }, onError = { Toast.makeText(this, "Listen failed: ${it.message}", Toast.LENGTH_SHORT).show() })
     }
 
     private fun beginReply(message: ChatMessage) {
         val room = selectedRoom ?: return; if (!canSendToRoom(room.id, room.readOnly)) return
-        replyToMessage = message; binding.tvReplyPreview?.text = "↩ Replying to ${message.senderName.ifBlank { "Unknown" }}\n${message.text.take(160)}"
-        binding.replyBar?.visibility = View.VISIBLE; binding.etMessage?.requestFocus()
+        replyToMessage = message; binding.tvReplyPreview?.text = "↩ Replying to ${message.senderName.ifBlank { "Unknown" }}\n${message.text.take(160)}"; binding.replyBar?.visibility = View.VISIBLE; binding.etMessage?.requestFocus()
     }
 
     private fun clearReply() { replyToMessage = null; if (::binding.isInitialized) { binding.replyBar?.visibility = View.GONE; binding.tvReplyPreview?.text = "" } }
@@ -216,8 +251,7 @@ class ChatHubActivity : BaseActivity() {
         val room = selectedRoom ?: return; if (!canSendToRoom(room.id, room.readOnly)) return
         val text = binding.etMessage?.text?.toString()?.trim().orEmpty()
         if (text.isEmpty()) { Toast.makeText(this, "Empty message", Toast.LENGTH_SHORT).show(); return }
-        repo.sendMessage(room.id, text, senderId, senderName, replyToMessage, extractMentions(text),
-            onOk = { binding.etMessage?.setText(""); clearReply() }, onError = { Toast.makeText(this, "Send failed: ${it.message}", Toast.LENGTH_LONG).show() })
+        repo.sendMessage(room.id, text, senderId, senderName, replyToMessage, extractMentions(text), { binding.etMessage?.setText(""); clearReply() }, { Toast.makeText(this, "Send failed: ${it.message}", Toast.LENGTH_LONG).show() })
     }
 
     private fun extractMentions(text: String): List<String> = Regex("(?<![A-Za-z0-9_])@([A-Za-z0-9_.-]{2,32})").findAll(text).map { it.groupValues[1].lowercase() }.distinct().toList()
@@ -226,8 +260,7 @@ class ChatHubActivity : BaseActivity() {
     private fun startRoomUnreadWatchers(rooms: List<ChatRoom>) {
         roomLastMsgListeners.values.forEach { it.remove() }; roomLastMsgListeners.clear(); val db = FirebaseFirestore.getInstance()
         rooms.forEach { room -> roomLastMsgListeners[room.id] = db.collection("rooms").document(room.id).collection("messages").orderBy("ts", Query.Direction.DESCENDING).limit(1).addSnapshotListener { snap, err ->
-            if (err != null) return@addSnapshotListener; val doc = snap?.documents?.firstOrNull() ?: return@addSnapshotListener
-            val ts = doc.getTimestamp("ts")?.toDate()?.time ?: return@addSnapshotListener
+            if (err != null) return@addSnapshotListener; val doc = snap?.documents?.firstOrNull() ?: return@addSnapshotListener; val ts = doc.getTimestamp("ts")?.toDate()?.time ?: return@addSnapshotListener
             roomsAdapter.setUnread(room.id, selectedRoom?.id != room.id && ts > prefs.getChatLastSeen(room.id))
         } }
     }
