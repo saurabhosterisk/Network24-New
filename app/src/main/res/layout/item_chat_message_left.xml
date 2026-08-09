@@ -9,9 +9,7 @@
     android:paddingEnd="12dp"
     android:paddingTop="8dp"
     android:paddingBottom="8dp">
-    <!-- YAHAN SE MAIN NE focusable, clickable aur background HATA DIYE HAIN -->
 
-    <!-- User icon (left) -->
     <TextView
         android:id="@+id/tvUserIcon"
         android:layout_width="36dp"
@@ -23,14 +21,12 @@
         android:background="#151B2C"
         android:textColor="@android:color/white"/>
 
-    <!-- Content (right of icon) -->
     <LinearLayout
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_weight="1"
         android:orientation="vertical">
 
-        <!-- Username + Time row -->
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -56,7 +52,22 @@
                 android:textColor="#78909C"/>
         </LinearLayout>
 
-        <!-- Message -->
+        <TextView
+            android:id="@+id/tvReplyPreview"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="3dp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:paddingTop="3dp"
+            android:paddingBottom="3dp"
+            android:text="↩ Reply to John: original message"
+            android:textSize="11sp"
+            android:textColor="#8FA6C8"
+            android:maxLines="2"
+            android:ellipsize="end"
+            android:visibility="gone"/>
+
         <TextView
             android:id="@+id/tvText"
             android:layout_width="wrap_content"
@@ -64,7 +75,6 @@
             android:layout_marginTop="2dp"
             android:text="message"
             android:textSize="15sp"
-
             android:maxHeight="500dp"
             android:scrollbars="vertical"
             android:focusable="true"
@@ -72,10 +82,7 @@
             android:isScrollContainer="true"
             android:background="?attr/selectableItemBackground"
             android:padding="4dp"
-
             android:textColor="@android:color/white"
             android:lineSpacingExtra="2dp"/>
-        <!-- MAIN HIGHLIGHT AUR FOCUS YAHAN SHIFT KAR DIYA HAI -->
-
     </LinearLayout>
 </LinearLayout>
