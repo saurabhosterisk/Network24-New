@@ -25,7 +25,8 @@ class MultiPlayerManager(
 
     private val players = arrayOfNulls<ExoPlayer>(4)
     private val urls = arrayOfNulls<String>(4)
-    private val reducedProfile = BooleanArray(4)
+    private val retryCounts = IntArray(4)
+    private val maxAutoRetries = 3
 
     fun attach(slot: Int, playerView: PlayerView) {
         require(slot in 0..3)
@@ -49,26 +50,34 @@ class MultiPlayerManager(
             .apply {
                 playWhenReady = true
                 volume = 0f
-                // Keep the audio renderer enabled so a focused window can turn
-                // audio on immediately without requiring a new media prepare.
-                // Volume is used to keep the three non-focused windows silent.
                 trackSelectionParameters = trackSelectionParameters
                     .buildUpon()
-                    .setSelectUndeterminedTextLanguage(true)
+                    .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true)
                     .build()
 
                 addListener(object : Player.Listener {
                     override fun onPlaybackStateChanged(playbackState: Int) {
                         when (playbackState) {
                             Player.STATE_BUFFERING -> listener?.onLoading(slot)
-                            Player.STATE_READY -> listener?.onReady(slot)
+                            Player.STATE_READY -> {
+                                retryCounts[slot] = 0
+                                listener?.onReady(slot)
+                            }
                             Player.STATE_ENDED -> listener?.onError(slot, "Stream ended")
                         }
                     }
 
                     override fun onPlayerError(error: PlaybackException) {
+                        val url = urls[slot]
+                        if (url.isNullOrBlank()) {
+                            listener?.onError(slot, "Playback error")
+                            return
+                        }
+
                         val httpError = findHttpError(error)
                         if (httpError != null) {
+                            // A server rejection such as HTTP 403 should not be
+                            // hammered with automatic retries.
                             listener?.onError(
                                 slot,
                                 "HTTP ${httpError.first} from ${httpError.second}"
@@ -76,32 +85,29 @@ class MultiPlayerManager(
                             return
                         }
 
-                        val cause = error.cause?.message ?: error.message ?: "Playback error"
-                        val decoderError = cause.contains("decoder", true) ||
-                            cause.contains("codec", true) ||
-                            cause.contains("MediaCodec", true) ||
-                            cause.contains("surface", true)
-
-                        if (decoderError && !reducedProfile[slot]) {
-                            reducedProfile[slot] = true
-                            trackSelectionParameters = trackSelectionParameters
-                                .buildUpon()
-                                .setMaxVideoSize(1280, 720)
-                                .setSelectUndeterminedTextLanguage(true)
-                                .build()
+                        if (retryCounts[slot] < maxAutoRetries) {
+                            retryCounts[slot]++
                             listener?.onLoading(slot)
-                            prepare()
-                            playWhenReady = true
-                            play()
+                            playerRetry(slot, url)
                         } else {
                             listener?.onError(
                                 slot,
-                                "${error.errorCodeName}: ${cause.take(220)}"
+                                "${error.errorCodeName}: ${(error.cause?.message ?: error.message ?: "Playback error").take(160)}"
                             )
                         }
                     }
                 })
             }
+    }
+
+    private fun playerRetry(slot: Int, url: String) {
+        val player = players[slot] ?: return
+        player.stop()
+        player.clearMediaItems()
+        player.setMediaItem(MediaItem.fromUri(url))
+        player.prepare()
+        player.playWhenReady = true
+        player.play()
     }
 
     private fun findHttpError(error: PlaybackException): Pair<Int, String>? {
@@ -127,7 +133,7 @@ class MultiPlayerManager(
         }
 
         urls[slot] = url
-        reducedProfile[slot] = false
+        retryCounts[slot] = 0
         listener?.onLoading(slot)
         player.stop()
         player.clearMediaItems()
@@ -140,9 +146,7 @@ class MultiPlayerManager(
     fun setAudioFocus(slot: Int) {
         require(slot in 0..3)
         for (i in 0..3) {
-            players[i]?.let { player ->
-                player.volume = if (i == slot) 1f else 0f
-            }
+            players[i]?.volume = if (i == slot) 1f else 0f
         }
     }
 
@@ -151,7 +155,7 @@ class MultiPlayerManager(
         players[slot]?.stop()
         players[slot]?.clearMediaItems()
         urls[slot] = null
-        reducedProfile[slot] = false
+        retryCounts[slot] = 0
     }
 
     fun getPlayer(slot: Int): ExoPlayer? = if (slot in 0..3) players[slot] else null
@@ -161,7 +165,7 @@ class MultiPlayerManager(
             players[i]?.release()
             players[i] = null
             urls[i] = null
-            reducedProfile[i] = false
+            retryCounts[i] = 0
         }
     }
 }
