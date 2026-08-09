@@ -14,10 +14,11 @@ import com.network24.player.R
 import com.network24.player.core.base.BaseActivity
 import com.network24.player.core.preferences.PreferenceManager
 import com.network24.player.databinding.ActivityMultiviewBinding
+import com.network24.player.core.database.entity.EpgEntity
 import com.network24.player.features.live.models.LiveChannel
 import com.network24.player.features.player.state.PlayerState
 
-class MultiViewActivity : BaseActivity() {
+class MultiViewActivity : BaseActivity(), MultiPlayerManager.Listener {
     private lateinit var binding: ActivityMultiviewBinding
     private lateinit var prefs: PreferenceManager
     private lateinit var multiPlayer: MultiPlayerManager
@@ -35,13 +36,16 @@ class MultiViewActivity : BaseActivity() {
     private val playerViews by lazy {
         arrayOf(binding.playerView1, binding.playerView2, binding.playerView3, binding.playerView4)
     }
+    private val progressBars by lazy {
+        arrayOf(binding.progress1, binding.progress2, binding.progress3, binding.progress4)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMultiviewBinding.inflate(layoutInflater)
         setContentView(binding.root)
         prefs = PreferenceManager(this)
-        multiPlayer = MultiPlayerManager(this)
+        multiPlayer = MultiPlayerManager(this, this)
 
         WindowCompat.setDecorFitsSystemWindows(window, false)
         WindowInsetsControllerCompat(window, binding.root).let { controller ->
@@ -71,6 +75,7 @@ class MultiViewActivity : BaseActivity() {
     private fun setSlot(slot: Int, channel: LiveChannel) {
         selected[slot] = channel
         labels[slot].text = channel.name ?: "Unknown Channel"
+        progressBars[slot].visibility = android.view.View.VISIBLE
         multiPlayer.attach(slot, playerViews[slot])
         multiPlayer.play(slot, buildStreamUrl(channel))
         multiPlayer.setAudioFocus(focusedSlot)
@@ -79,6 +84,7 @@ class MultiViewActivity : BaseActivity() {
     private fun clearSlot(slot: Int) {
         selected[slot] = null
         labels[slot].text = "Select channel"
+        progressBars[slot].visibility = android.view.View.GONE
         multiPlayer.clear(slot)
     }
 
@@ -107,6 +113,27 @@ class MultiViewActivity : BaseActivity() {
     private fun buildStreamUrl(channel: LiveChannel): String {
         val server = prefs.getServer().trim().trimEnd('/')
         return "$server/live/${prefs.getUsername().trim()}/${prefs.getPassword().trim()}/${channel.stream_id}.m3u8"
+    }
+
+    override fun onLoading(slot: Int) {
+        runOnUiThread {
+            if (slot in 0..3) progressBars[slot].visibility = android.view.View.VISIBLE
+        }
+    }
+
+    override fun onReady(slot: Int) {
+        runOnUiThread {
+            if (slot in 0..3) progressBars[slot].visibility = android.view.View.GONE
+        }
+    }
+
+    override fun onError(slot: Int, message: String) {
+        runOnUiThread {
+            if (slot !in 0..3) return@runOnUiThread
+            progressBars[slot].visibility = android.view.View.GONE
+            labels[slot].text = "Playback error"
+            Toast.makeText(this, "Window ${slot + 1}: $message", Toast.LENGTH_LONG).show()
+        }
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
