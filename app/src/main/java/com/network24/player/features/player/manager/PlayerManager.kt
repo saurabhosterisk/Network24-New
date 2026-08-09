@@ -22,16 +22,20 @@ object PlayerManager {
     private var currentUrl: String? = null
     private var currentPlayerView: PlayerView? = null
 
-    // 1. Ek powerful LoadControl banayein Live IPTV ke liye (FAST ZAPPING MODE)
+    // Session diagnostics. These are reset whenever a new stream starts.
+    private var rebufferCount = 0
+    private var bufferingStartedAtMs = 0L
+    private var totalBufferingMs = 0L
+    private var lastError: PlaybackException? = null
+    private var lastPlaybackState = Player.STATE_IDLE
+
     private val loadControl = DefaultLoadControl.Builder()
         .setBufferDurationsMs(
-            15000, // Min Buffer: 15 seconds (Memory kam use karega, app fast rahegi)
-            50000, // Max Buffer: 50 seconds tak pre-load karega (Stability ke liye)
-            1000,  // 🔥 FAST START: Sirf 1 second ka data milte hi channel chalu kar dega!
-            2000   // REBUFFER: Agar net atka, toh wapas chalne ke liye sirf 2 sec wait karega
+            15000,
+            50000,
+            1000,
+            2000
         ).build()
-
-
 
     fun getPlayer(context: Context): ExoPlayer {
         if (exoPlayer == null) {
@@ -44,8 +48,6 @@ object PlayerManager {
             }
 
             val mediaSourceFactory = DefaultMediaSourceFactory(countingFactory)
-
-            // CRITICAL FIX FOR S25 EDGE & NEW PHONES (Black Screen Issue)
             val renderersFactory = DefaultRenderersFactory(context.applicationContext).apply {
                 setEnableDecoderFallback(true)
                 setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
@@ -55,23 +57,36 @@ object PlayerManager {
                 context.applicationContext,
                 renderersFactory
             )
-                .setLoadControl(loadControl) // 🔥 FIX 1: Is line se Anti-Buffering apply hoga
+                .setLoadControl(loadControl)
                 .setMediaSourceFactory(mediaSourceFactory)
                 .build()
                 .apply {
                     playWhenReady = true
 
-                    // 🔥 FIX 2: Yahan se buffering karne wali purani line hata di gayi hai
                     trackSelectionParameters = trackSelectionParameters
                         .buildUpon()
-                        // .setIgnoredTextSelectionFlags(androidx.media3.common.C.SELECTION_FLAG_FORCED) => Subtitle ko Ek line me show karne ke liye but Buffering badha deta hai
                         .setSelectUndeterminedTextLanguage(true)
                         .build()
 
                     addListener(object : Player.Listener {
-                        override fun onPlayerError(
-                            error: PlaybackException
-                        ) {
+                        override fun onPlaybackStateChanged(playbackState: Int) {
+                            val wasBuffering = lastPlaybackState == Player.STATE_BUFFERING
+
+                            if (playbackState == Player.STATE_BUFFERING && !wasBuffering) {
+                                rebufferCount++
+                                bufferingStartedAtMs = System.currentTimeMillis()
+                            } else if (wasBuffering && playbackState != Player.STATE_BUFFERING) {
+                                if (bufferingStartedAtMs > 0L) {
+                                    totalBufferingMs += System.currentTimeMillis() - bufferingStartedAtMs
+                                    bufferingStartedAtMs = 0L
+                                }
+                            }
+
+                            lastPlaybackState = playbackState
+                        }
+
+                        override fun onPlayerError(error: PlaybackException) {
+                            lastError = error
                             error.printStackTrace()
                         }
                     })
@@ -80,32 +95,22 @@ object PlayerManager {
         return exoPlayer!!
     }
 
-    fun attach(
-        context: Context,
-        playerView: PlayerView
-    ) {
+    fun attach(context: Context, playerView: PlayerView) {
         val player = getPlayer(context)
-        if (currentPlayerView === playerView)
-            return
+        if (currentPlayerView === playerView) return
         currentPlayerView?.player = null
         playerView.player = player
         currentPlayerView = playerView
     }
 
-    fun detach(
-        playerView: PlayerView
-    ) {
+    fun detach(playerView: PlayerView) {
         if (currentPlayerView === playerView) {
             playerView.player = null
             currentPlayerView = null
         }
     }
 
-    fun play(
-        context: Context,
-        playerView: PlayerView,
-        streamUrl: String
-    ) {
+    fun play(context: Context, playerView: PlayerView, streamUrl: String) {
         val player = getPlayer(context)
         attach(context, playerView)
 
@@ -118,6 +123,7 @@ object PlayerManager {
         }
 
         currentUrl = streamUrl
+        resetDiagnostics()
         player.stop()
         player.clearMediaItems()
         player.setMediaItem(MediaItem.fromUri(streamUrl))
@@ -125,13 +131,8 @@ object PlayerManager {
         player.play()
     }
 
-    fun pause() {
-        exoPlayer?.pause()
-    }
-
-    fun resume() {
-        exoPlayer?.play()
-    }
+    fun pause() { exoPlayer?.pause() }
+    fun resume() { exoPlayer?.play() }
 
     fun stop() {
         exoPlayer?.stop()
@@ -142,29 +143,36 @@ object PlayerManager {
         exoPlayer?.release()
         exoPlayer = null
         currentUrl = null
+        resetDiagnostics()
     }
 
-    fun isPlaying(): Boolean {
-        return exoPlayer?.isPlaying ?: false
-    }
+    fun isPlaying(): Boolean = exoPlayer?.isPlaying ?: false
+    fun getCurrentUrl(): String? = currentUrl
 
-    fun getCurrentUrl(): String? {
-        return currentUrl
-    }
-
-    fun moveTo(
-        context: Context,
-        playerView: PlayerView
-    ) {
-        attach(
-            context,
-            playerView
-        )
+    fun moveTo(context: Context, playerView: PlayerView) {
+        attach(context, playerView)
     }
 
     fun getExoPlayerOrNull(): ExoPlayer? = exoPlayer
-
     fun getCurrentUrlOrEmpty(): String = currentUrl ?: ""
 
+    fun getRebufferCount(): Int = rebufferCount
 
+    fun getTotalBufferingMs(): Long {
+        return if (bufferingStartedAtMs > 0L) {
+            totalBufferingMs + (System.currentTimeMillis() - bufferingStartedAtMs)
+        } else {
+            totalBufferingMs
+        }
+    }
+
+    fun getLastError(): PlaybackException? = lastError
+
+    private fun resetDiagnostics() {
+        rebufferCount = 0
+        bufferingStartedAtMs = 0L
+        totalBufferingMs = 0L
+        lastError = null
+        lastPlaybackState = Player.STATE_IDLE
+    }
 }
