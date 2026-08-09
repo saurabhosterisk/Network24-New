@@ -3,14 +3,20 @@ package com.network24.player.features.dashboard.activity
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Color
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.view.Gravity
 import android.view.View
 import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.view.GravityCompat
@@ -27,6 +33,9 @@ import com.network24.player.features.live.repository.LiveRepository
 import com.network24.player.features.live.repository.SyncCallback
 import com.network24.player.features.login.activity.LoginActivity
 import com.network24.player.features.settings.activity.SettingsActivity
+import com.google.zxing.BarcodeFormat
+import com.google.zxing.MultiFormatWriter
+import com.google.zxing.common.BitMatrix
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -36,6 +45,7 @@ class DashboardActivity : BaseActivity() {
 
     private companion object {
         private const val REQ_POST_NOTIFICATIONS = 9001
+        private const val PAYMENT_URL = "https://osterisktechnology.com/makepayment.html"
     }
 
     private lateinit var binding: ActivityDashboardBinding
@@ -222,7 +232,7 @@ class DashboardActivity : BaseActivity() {
 
         // Live Chat card: update the label and icon while keeping the existing
         // ChatHubActivity navigation unchanged.
-        val supportContent = binding.cardSupport.getChildAt(0) as? android.widget.LinearLayout
+        val supportContent = binding.cardSupport.getChildAt(0) as? LinearLayout
         (supportContent?.getChildAt(0) as? ImageView)?.setImageResource(R.drawable.ic_live_chat)
         (supportContent?.getChildAt(1) as? TextView)?.text = "Live Chat"
 
@@ -235,8 +245,76 @@ class DashboardActivity : BaseActivity() {
         }
 
         binding.btnRenew.setOnClickListener {
-            Toast.makeText(this, "Renew Subscription", Toast.LENGTH_SHORT).show()
+            showRenewPaymentQr()
         }
+    }
+
+    private fun showRenewPaymentQr() {
+        val qrSize = 720
+        val matrix: BitMatrix = MultiFormatWriter().encode(
+            PAYMENT_URL,
+            BarcodeFormat.QR_CODE,
+            qrSize,
+            qrSize
+        )
+
+        val pixels = IntArray(qrSize * qrSize)
+        for (y in 0 until qrSize) {
+            val offset = y * qrSize
+            for (x in 0 until qrSize) {
+                pixels[offset + x] = if (matrix[x, y]) Color.BLACK else Color.WHITE
+            }
+        }
+
+        val qrBitmap = Bitmap.createBitmap(
+            pixels,
+            0,
+            qrSize,
+            qrSize,
+            Bitmap.Config.ARGB_8888
+        )
+
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(32, 8, 32, 8)
+        }
+
+        val instruction = TextView(this).apply {
+            text = "QR code ko doosre mobile se scan kijiye\n\naap directly payment page par pahunch jayenge."
+            gravity = Gravity.CENTER
+            textSize = 15f
+            setTextColor(Color.DKGRAY)
+        }
+
+        val imageView = ImageView(this).apply {
+            setImageBitmap(qrBitmap)
+            adjustViewBounds = true
+            setPadding(8, 20, 8, 20)
+        }
+
+        val destination = TextView(this).apply {
+            text = PAYMENT_URL
+            gravity = Gravity.CENTER
+            textSize = 12f
+            setTextColor(Color.GRAY)
+        }
+
+        container.addView(instruction)
+        container.addView(imageView, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ))
+        container.addView(destination)
+
+        AlertDialog.Builder(this)
+            .setTitle("Renew Subscription")
+            .setView(container)
+            .setNegativeButton("Close", null)
+            .setPositiveButton("Open Payment Page") { _, _ ->
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(PAYMENT_URL)))
+            }
+            .show()
     }
 
     // ----------------------------
