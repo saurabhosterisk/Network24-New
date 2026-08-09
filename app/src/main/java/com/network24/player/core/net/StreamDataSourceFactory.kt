@@ -11,10 +11,6 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 /**
  * Single source of truth for stream HTTP/media-source configuration.
  * Normal playback and MultiView use the same request configuration.
- *
- * MultiView prefers the Media3 FFmpeg extension renderer so supported video
- * codecs are decoded in software. Normal playback keeps the same factory
- * entry point but is not otherwise forced to software decoding.
  */
 @OptIn(UnstableApi::class)
 object StreamDataSourceFactory {
@@ -34,7 +30,20 @@ object StreamDataSourceFactory {
         return DefaultMediaSourceFactory(createDataSourceFactory())
     }
 
+    /** Normal player: keep the standard Media3 renderer selection. */
     fun createRenderersFactory(context: Context): DefaultRenderersFactory {
+        return DefaultRenderersFactory(context.applicationContext).apply {
+            setEnableDecoderFallback(true)
+        }
+    }
+
+    /**
+     * MultiView: prefer the bundled Media3 FFmpeg extension renderer.
+     * Supported codecs are therefore decoded in software instead of using the
+     * device MediaCodec decoder first. If a stream codec is not supported by
+     * FFmpeg, Media3 can still fall back to its normal decoder path.
+     */
+    fun createSoftwareRenderersFactory(context: Context): DefaultRenderersFactory {
         return DefaultRenderersFactory(context.applicationContext).apply {
             setEnableDecoderFallback(true)
             setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
