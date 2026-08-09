@@ -15,17 +15,7 @@ class FavoritesRepository(
         firestore.collection("user_favorites").document(userId)
 
     suspend fun getFavoriteItemIds(userId: String, type: String): Set<String> {
-        return try {
-            val snapshot = doc(userId).get().await()
-            val keys = snapshot.get("items") as? List<*> ?: emptyList<Any>()
-            keys.mapNotNull { key ->
-                val value = key?.toString() ?: return@mapNotNull null
-                val parts = value.split(":", limit = 2)
-                if (parts.getOrNull(0) == type) parts.getOrNull(1) else null
-            }.toSet()
-        } catch (_: Exception) {
-            emptySet()
-        }
+        return favoritesDao.getByType(type).map { it.itemId }.toSet()
     }
 
     suspend fun syncFromCloud(userId: String) {
@@ -33,8 +23,10 @@ class FavoritesRepository(
             val snapshot = doc(userId).get().await()
             if (!snapshot.exists()) return
 
-            val keys = snapshot.get("items") as? List<String> ?: emptyList()
-            keys.forEach { key ->
+            val keys = snapshot.get("items") as? List<*> ?: emptyList<Any>()
+            favoritesDao.clearAll()
+            keys.forEach { raw ->
+                val key = raw?.toString() ?: return@forEach
                 val parts = key.split(":", limit = 2)
                 val type = parts.getOrNull(0) ?: return@forEach
                 val itemId = parts.getOrNull(1) ?: return@forEach
@@ -49,7 +41,7 @@ class FavoritesRepository(
                 )
             }
         } catch (_: Exception) {
-            // offline / error => ignore
+            // offline / error => keep local cache intact
         }
     }
 
