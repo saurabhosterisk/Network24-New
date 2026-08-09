@@ -33,6 +33,7 @@
         </provider>
 
         <activity android:name=".features.player.activity.PlayerActivity" android:exported="false" android:screenOrientation="landscape" />
+        <activity android:name=".features.player.multiview.MultiViewActivity" android:exported="false" android:screenOrientation="landscape" />
         <activity android:name=".features.live.activity.ChannelListActivity" android:exported="false" android:screenOrientation="landscape" />
         <activity android:name=".features.live.activity.FavoriteChannelsActivity" android:exported="false" android:screenOrientation="landscape" />
         <activity android:name=".features.login.activity.LoginActivity" android:exported="false" android:screenOrientation="landscape" />
