@@ -11,7 +11,6 @@
                 <TableRow><TextView android:text="Quality" android:textColor="#A7B0C0" android:textStyle="bold"/><TextView android:id="@+id/tvHealthLabel" android:text="—" android:textColor="@android:color/white"/></TableRow>
                 <TableRow><TextView android:text="Rebuffers" android:textColor="#A7B0C0" android:textStyle="bold"/><TextView android:id="@+id/tvRebufferCount" android:text="—" android:textColor="@android:color/white"/></TableRow>
                 <TableRow><TextView android:text="Buffering Time" android:textColor="#A7B0C0" android:textStyle="bold"/><TextView android:id="@+id/tvBufferingTime" android:text="—" android:textColor="@android:color/white"/></TableRow>
-                <TableRow><TextView android:text="Diagnosis" android:textColor="#A7B0C0" android:textStyle="bold"/><TextView android:id="@+id/tvDiagnosis" android:text="Checking…" android:textColor="@android:color/white" android:maxLines="3"/></TableRow>
             </TableLayout>
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
@@ -30,7 +29,7 @@
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 
-    <com.google.android.material.card.MaterialCardView android:id="@+id/cardVideoAudio" android:layout_width="0dp" android:layout_height="0dp" android:layout_marginEnd="6dp" android:layout_marginTop="6dp" android:layout_marginBottom="8dp" app:cardBackgroundColor="#1A1F2C" app:cardCornerRadius="12dp" app:strokeColor="#2A3245" app:strokeWidth="1dp" app:layout_constraintTop_toBottomOf="@id/cardStream" app:layout_constraintStart_toStartOf="parent" app:layout_constraintEnd_toStartOf="@id/guidelineMid" app:layout_constraintBottom_toTopOf="@id/bottomButtonsLayout">
+    <com.google.android.material.card.MaterialCardView android:id="@+id/cardVideoAudio" android:layout_width="0dp" android:layout_height="0dp" android:layout_marginEnd="6dp" android:layout_marginTop="6dp" android:layout_marginBottom="6dp" app:cardBackgroundColor="#1A1F2C" app:cardCornerRadius="12dp" app:strokeColor="#2A3245" app:strokeWidth="1dp" app:layout_constraintTop_toBottomOf="@id/cardStream" app:layout_constraintStart_toStartOf="parent" app:layout_constraintEnd_toStartOf="@id/guidelineMid" app:layout_constraintBottom_toTopOf="@id/cardDiagnosis">
         <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:padding="12dp">
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="VIDEO / AUDIO" android:textColor="#7FB3FF" android:textSize="15sp" android:textStyle="bold" />
             <TableLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="7dp" android:stretchColumns="1">
@@ -44,7 +43,7 @@
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 
-    <com.google.android.material.card.MaterialCardView android:id="@+id/cardNetwork" android:layout_width="0dp" android:layout_height="0dp" android:layout_marginStart="6dp" android:layout_marginTop="6dp" android:layout_marginBottom="8dp" app:cardBackgroundColor="#1A1F2C" app:cardCornerRadius="12dp" app:strokeColor="#2A3245" app:strokeWidth="1dp" app:layout_constraintTop_toBottomOf="@id/cardPlayback" app:layout_constraintStart_toEndOf="@id/guidelineMid" app:layout_constraintEnd_toEndOf="parent" app:layout_constraintBottom_toTopOf="@id/bottomButtonsLayout">
+    <com.google.android.material.card.MaterialCardView android:id="@+id/cardNetwork" android:layout_width="0dp" android:layout_height="0dp" android:layout_marginStart="6dp" android:layout_marginTop="6dp" android:layout_marginBottom="6dp" app:cardBackgroundColor="#1A1F2C" app:cardCornerRadius="12dp" app:strokeColor="#2A3245" app:strokeWidth="1dp" app:layout_constraintTop_toBottomOf="@id/cardPlayback" app:layout_constraintStart_toEndOf="@id/guidelineMid" app:layout_constraintEnd_toEndOf="parent" app:layout_constraintBottom_toTopOf="@id/cardDiagnosis">
         <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:padding="12dp">
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="NETWORK / SOURCE" android:textColor="#7FB3FF" android:textSize="15sp" android:textStyle="bold" />
             <TableLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="7dp" android:stretchColumns="1">
@@ -55,6 +54,13 @@
                 <TableRow><TextView android:text="Live Latency" android:textColor="#A7B0C0" android:textStyle="bold"/><TextView android:id="@+id/tvLiveLatency" android:text="—" android:textColor="@android:color/white"/></TableRow>
                 <TableRow><TextView android:text="Last Error" android:textColor="#A7B0C0" android:textStyle="bold"/><TextView android:id="@+id/tvLastError" android:text="None" android:textColor="@android:color/white" android:maxLines="2"/></TableRow>
             </TableLayout>
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+
+    <com.google.android.material.card.MaterialCardView android:id="@+id/cardDiagnosis" android:layout_width="0dp" android:layout_height="0dp" android:layout_marginTop="6dp" android:layout_marginBottom="8dp" app:cardBackgroundColor="#1A1F2C" app:cardCornerRadius="12dp" app:strokeColor="#2A3245" app:strokeWidth="1dp" app:layout_constraintStart_toStartOf="parent" app:layout_constraintEnd_toEndOf="parent" app:layout_constraintTop_toBottomOf="@id/cardVideoAudio" app:layout_constraintBottom_toTopOf="@id/bottomButtonsLayout">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:padding="12dp">
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="DIAGNOSIS" android:textColor="#7FB3FF" android:textSize="15sp" android:textStyle="bold" />
+            <TextView android:id="@+id/tvDiagnosis" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="Checking stream health…" android:textColor="@android:color/white" android:textSize="14sp" android:maxLines="3" android:ellipsize="end" />
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 
