@@ -1,5 +1,7 @@
 package com.network24.player.features.chat.adapter
 
+import android.graphics.Color
+import android.text.method.ScrollingMovementMethod
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -11,13 +13,12 @@ import com.network24.player.R
 import com.network24.player.features.chat.repo.ChatMessage
 import java.text.SimpleDateFormat
 import java.util.Locale
-import android.text.method.ScrollingMovementMethod
 
 class ChatMessagesAdapter(
     private val mySenderId: String,
     private val onReply: (ChatMessage) -> Unit = {},
     private val onMessageMenu: (ChatMessage) -> Unit = {},
-    private val onReaction: (ChatMessage, String) -> Unit = { _, _ -> }
+    private val onReaction: (ChatMessage, String) -> Unit = {}
 ) : RecyclerView.Adapter<ChatMessagesAdapter.VH>() {
     private val items = mutableListOf<ChatMessage>()
     fun submit(list: List<ChatMessage>) { items.clear(); items.addAll(list); notifyDataSetChanged() }
@@ -29,22 +30,14 @@ class ChatMessagesAdapter(
     override fun onBindViewHolder(holder: VH, position: Int) = holder.bind(items[position], mySenderId)
     override fun getItemCount(): Int = items.size
 
-    class VH(
-        itemView: View,
-        private val onReply: (ChatMessage) -> Unit,
-        private val onMessageMenu: (ChatMessage) -> Unit,
-        private val onReaction: (ChatMessage, String) -> Unit
-    ) : RecyclerView.ViewHolder(itemView) {
+    class VH(itemView: View, private val onReply: (ChatMessage) -> Unit, private val onMessageMenu: (ChatMessage) -> Unit, private val onReaction: (ChatMessage, String) -> Unit) : RecyclerView.ViewHolder(itemView) {
         private val tvSender: TextView = itemView.findViewById(R.id.tvSender)
         private val tvText: TextView = itemView.findViewById(R.id.tvText)
         private val tvTime: TextView = itemView.findViewById(R.id.tvTime)
         private val tvReplyPreview: TextView = itemView.findViewById(R.id.tvReplyPreview)
         private val tvUserIcon: TextView? = itemView.findViewById<View?>(R.id.tvUserIcon) as? TextView
-        private val reactions: LinearLayout = LinearLayout(itemView.context).apply {
-            orientation = LinearLayout.HORIZONTAL
-            visibility = View.GONE
-            setPadding(0, 4, 0, 0)
-        }
+        private val reactions = LinearLayout(itemView.context).apply { orientation = LinearLayout.HORIZONTAL; visibility = View.GONE; setPadding(0, 4, 0, 0) }
+        private lateinit var current: ChatMessage
 
         init {
             (tvText.parent as? ViewGroup)?.addView(reactions)
@@ -52,52 +45,39 @@ class ChatMessagesAdapter(
             tvText.setOnLongClickListener { onMessageMenu(current); true }
         }
 
-        private lateinit var current: ChatMessage
-
         fun bind(m: ChatMessage, mySenderId: String) {
             current = m
             val isMine = m.senderId.isNotBlank() && m.senderId == mySenderId
             tvSender.text = if (isMine) "You" else m.senderName.ifBlank { "Unknown" }
-            tvText.text = m.text
             tvTime.text = formatLocalTime(m.ts)
             tvUserIcon?.text = "👤"
+            if (m.deleted) {
+                tvText.text = "🚫 This message was deleted"
+                tvText.setTextColor(Color.parseColor("#78909C"))
+                tvReplyPreview.visibility = View.GONE
+                reactions.visibility = View.GONE
+                tvText.setOnClickListener(null)
+                tvText.setOnLongClickListener(null)
+                return
+            }
+            tvText.text = if (m.edited) "${m.text}  (edited)" else m.text
+            tvText.setTextColor(Color.WHITE)
             tvText.movementMethod = ScrollingMovementMethod.getInstance()
             if (!m.replyToMessageId.isNullOrBlank()) {
                 tvReplyPreview.text = "↩ Reply to ${m.replyToSenderName?.ifBlank { "Unknown" } ?: "Unknown"}: ${m.replyToText.orEmpty().take(120)}"
                 tvReplyPreview.visibility = View.VISIBLE
             } else tvReplyPreview.visibility = View.GONE
-
             reactions.removeAllViews()
-            val ordered = listOf("👍", "❤️", "😂", "😮", "😢", "😡")
-            ordered.filter { m.reactions[it]?.isNotEmpty() == true }.forEach { emoji ->
-                val count = m.reactions[emoji]?.size ?: 0
-                val chip = TextView(itemView.context).apply {
-                    text = "$emoji $count"
-                    textSize = 12f
-                    setTextColor(android.graphics.Color.WHITE)
-                    setBackgroundResource(R.drawable.bg_reaction_chip)
-                    setOnClickListener { onReaction(current, emoji) }
-                }
-                val lp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-                lp.marginEnd = 6
-                reactions.addView(chip, lp)
+            listOf("👍", "❤️", "😂", "😮", "😢", "😡").filter { m.reactions[it]?.isNotEmpty() == true }.forEach { emoji ->
+                val chip = TextView(itemView.context).apply { text = "$emoji ${m.reactions[emoji]?.size ?: 0}"; textSize = 12f; setTextColor(Color.WHITE); setBackgroundResource(R.drawable.bg_reaction_chip); setOnClickListener { onReaction(current, emoji) } }
+                val lp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT); lp.marginEnd = 6; reactions.addView(chip, lp)
             }
-            val add = TextView(itemView.context).apply {
-                text = "+"
-                textSize = 14f
-                setTextColor(android.graphics.Color.WHITE)
-                setPadding(10, 4, 10, 4)
-                setBackgroundResource(R.drawable.bg_reaction_chip)
-                setOnClickListener { onReaction(current, "__picker__") }
-            }
-            reactions.addView(add)
-            reactions.visibility = View.VISIBLE
+            val add = TextView(itemView.context).apply { text = "+"; textSize = 14f; setTextColor(Color.WHITE); setPadding(10, 4, 10, 4); setBackgroundResource(R.drawable.bg_reaction_chip); setOnClickListener { onReaction(current, "__picker__") } }
+            reactions.addView(add); reactions.visibility = View.VISIBLE
+            tvText.setOnClickListener { onReply(current) }
+            tvText.setOnLongClickListener { onMessageMenu(current); true }
         }
-
-        private fun formatLocalTime(ts: Timestamp?): String {
-            if (ts == null) return ""
-            return SimpleDateFormat("dd/MM/yyyy, HH:mm", Locale.getDefault()).format(ts.toDate())
-        }
+        private fun formatLocalTime(ts: Timestamp?): String = if (ts == null) "" else SimpleDateFormat("dd/MM/yyyy, HH:mm", Locale.getDefault()).format(ts.toDate())
     }
     companion object { private const val VIEW_LEFT = 0; private const val VIEW_RIGHT = 1 }
 }
