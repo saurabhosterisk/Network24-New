@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
@@ -18,7 +19,7 @@ class MultiPlayerManager(private val context: Context) {
     private val urls = arrayOfNulls<String>(4)
 
     private val loadControl = DefaultLoadControl.Builder()
-        .setBufferDurationsMs(5000, 15000, 500, 1000)
+        .setBufferDurationsMs(3000, 12000, 500, 1000)
         .build()
 
     fun attach(slot: Int, playerView: PlayerView) {
@@ -43,11 +44,10 @@ class MultiPlayerManager(private val context: Context) {
             .apply {
                 playWhenReady = true
                 volume = 0f
-                // Do not cap at 480p: some providers expose only 720p/1080p.
-                // A hard 480p ceiling can leave no selectable video track and
-                // produce a black surface. 720p is a safer 4-up compromise.
+                // Do not impose a resolution ceiling. XC providers may expose
+                // only 720p/1080p renditions. A hard cap can leave no selectable
+                // video track and result in a black tile.
                 trackSelectionParameters = trackSelectionParameters.buildUpon()
-                    .setMaxVideoSize(1280, 720)
                     .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true)
                     .build()
             }
@@ -56,11 +56,13 @@ class MultiPlayerManager(private val context: Context) {
     fun play(slot: Int, url: String) {
         require(slot in 0..3)
         val player = players[slot] ?: createPlayer().also { players[slot] = it }
-        if (urls[slot] == url && player.playbackState != androidx.media3.common.Player.STATE_IDLE) {
+
+        if (urls[slot] == url && player.playbackState != Player.STATE_IDLE) {
             player.playWhenReady = true
             player.play()
             return
         }
+
         urls[slot] = url
         player.stop()
         player.clearMediaItems()
@@ -73,10 +75,10 @@ class MultiPlayerManager(private val context: Context) {
     fun setAudioFocus(slot: Int) {
         for (i in 0..3) {
             players[i]?.apply {
-                volume = if (i == slot) 1f else 0f
+                val focused = i == slot
+                volume = if (focused) 1f else 0f
                 trackSelectionParameters = trackSelectionParameters.buildUpon()
-                    .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, i != slot)
-                    .setMaxVideoSize(1280, 720)
+                    .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, !focused)
                     .build()
             }
         }
@@ -88,6 +90,8 @@ class MultiPlayerManager(private val context: Context) {
         players[slot]?.clearMediaItems()
         urls[slot] = null
     }
+
+    fun getPlayer(slot: Int): ExoPlayer? = if (slot in 0..3) players[slot] else null
 
     fun release() {
         for (i in 0..3) {
