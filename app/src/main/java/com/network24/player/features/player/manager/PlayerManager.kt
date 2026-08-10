@@ -12,6 +12,11 @@ import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import com.network24.player.core.net.StreamDataSourceFactory
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @OptIn(UnstableApi::class)
 object PlayerManager {
@@ -28,6 +33,14 @@ object PlayerManager {
     private var totalBufferingMs = 0L
     private var lastError: PlaybackException? = null
     private var lastPlaybackState = Player.STATE_IDLE
+
+    // Live Channels preview recovery. This is intentionally owned by PlayerManager
+    // so it also survives ExoPlayer replacement without requiring a listener to be
+    // re-attached to every newly created player instance.
+    private var liveRecoveryJob: Job? = null
+    private var liveRecoveryStartedAtMs = 0L
+    private var liveRecoveryAttempt = 0
+    private const val LIVE_RECOVERY_WINDOW_MS = 30_000L
 
     private val loadControl = DefaultLoadControl.Builder()
         .setBufferDurationsMs(20_000, 60_000, 3_000, 6_000)
@@ -47,6 +60,7 @@ object PlayerManager {
 
             override fun onActivityStopped(activity: Activity) {
                 if (ownerActivity === activity) {
+                    cancelLiveRecovery()
                     release()
                     ownerActivity = null
                 }
@@ -89,6 +103,7 @@ object PlayerManager {
                         override fun onPlayerError(error: PlaybackException) {
                             lastError = error
                             error.printStackTrace()
+                            scheduleLiveChannelRecoveryIfNeeded()
                         }
                     })
                 }
@@ -129,6 +144,8 @@ object PlayerManager {
     }
 
     fun play(context: Context, playerView: PlayerView, streamUrl: String) {
+        cancelLiveRecovery()
+
         if (currentUrl != null && currentUrl != streamUrl) {
             releaseCurrentStreamForSwitch()
         }
@@ -156,6 +173,7 @@ object PlayerManager {
     }
 
     private fun releaseCurrentStreamForSwitch() {
+        cancelLiveRecovery()
         currentPlayerView?.player = null
         currentPlayerView = null
         exoPlayer?.stop()
@@ -168,6 +186,7 @@ object PlayerManager {
     }
 
     fun retryCurrent() {
+        cancelLiveRecovery()
         val player = exoPlayer ?: return
         if (currentUrl.isNullOrBlank()) return
         player.prepare()
@@ -178,12 +197,14 @@ object PlayerManager {
     fun resume() { exoPlayer?.play() }
 
     fun stop() {
+        cancelLiveRecovery()
         exoPlayer?.stop()
         exoPlayer?.clearMediaItems()
         currentUrl = null
     }
 
     fun release() {
+        cancelLiveRecovery()
         // Keep the last URL only so a screen that comes back can reconnect.
         // The actual ExoPlayer, media items and HTTP/HLS connection are released.
         if (!currentUrl.isNullOrBlank()) lastStreamUrl = currentUrl
@@ -195,6 +216,59 @@ object PlayerManager {
         exoPlayer = null
         currentUrl = null
         resetDiagnostics()
+    }
+
+    private fun scheduleLiveChannelRecoveryIfNeeded() {
+        val activity = ownerActivity ?: return
+        if (!activity.javaClass.name.endsWith("features.live.activity.ChannelListActivity")) return
+        if (currentUrl.isNullOrBlank() || exoPlayer == null) return
+
+        if (liveRecoveryStartedAtMs == 0L) {
+            liveRecoveryStartedAtMs = System.currentTimeMillis()
+            liveRecoveryAttempt = 0
+        }
+
+        val elapsed = System.currentTimeMillis() - liveRecoveryStartedAtMs
+        if (elapsed >= LIVE_RECOVERY_WINDOW_MS) return
+
+        liveRecoveryAttempt++
+        val remaining = LIVE_RECOVERY_WINDOW_MS - elapsed
+        val retryDelay = when (liveRecoveryAttempt) {
+            1 -> 2_000L
+            2 -> 3_000L
+            3 -> 5_000L
+            else -> 7_000L
+        }.coerceAtMost(remaining)
+
+        liveRecoveryJob?.cancel()
+        val failedPlayer = exoPlayer
+        val failedUrl = currentUrl
+        liveRecoveryJob = CoroutineScope(Dispatchers.Main.immediate).launch {
+            delay(retryDelay)
+
+            if (ownerActivity !== activity) return@launch
+            if (exoPlayer !== failedPlayer) return@launch
+            if (currentUrl != failedUrl) return@launch
+            if (currentUrl.isNullOrBlank()) return@launch
+
+            val nowElapsed = System.currentTimeMillis() - liveRecoveryStartedAtMs
+            if (nowElapsed >= LIVE_RECOVERY_WINDOW_MS) return@launch
+
+            try {
+                val player = exoPlayer ?: return@launch
+                player.prepare()
+                player.play()
+            } catch (_: Exception) {
+                // A subsequent ExoPlayer error will schedule the next recovery attempt.
+            }
+        }
+    }
+
+    private fun cancelLiveRecovery() {
+        liveRecoveryJob?.cancel()
+        liveRecoveryJob = null
+        liveRecoveryStartedAtMs = 0L
+        liveRecoveryAttempt = 0
     }
 
     fun isPlaying(): Boolean = exoPlayer?.isPlaying ?: false
