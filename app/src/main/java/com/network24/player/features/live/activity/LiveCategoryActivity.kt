@@ -6,7 +6,6 @@ import android.text.Editable
 import android.text.TextWatcher
 import android.view.View
 import android.widget.Toast
-import androidx.core.view.GravityCompat
 import androidx.drawerlayout.widget.DrawerLayout
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
@@ -42,6 +41,7 @@ class LiveCategoryActivity : BaseActivity() {
     private lateinit var prefs: PreferenceManager
     private lateinit var favRepo: FavoritesRepository
     private lateinit var categorySettingsRepository: CategorySettingsRepository
+    private val epgMode by lazy { intent.getBooleanExtra("epg_mode", false) }
 
     private val allCategories = mutableListOf<LiveCategory>()
     private val favoriteCategories = mutableListOf<LiveCategory>()
@@ -58,16 +58,17 @@ class LiveCategoryActivity : BaseActivity() {
 
         prefs = PreferenceManager(this)
         repository = LiveRepository(this)
-        favRepo = FavoritesRepository(
-            DatabaseProvider.get(this).favoritesDao(),
-            FirebaseFirestore.getInstance()
-        )
+        favRepo = FavoritesRepository(DatabaseProvider.get(this).favoritesDao(), FirebaseFirestore.getInstance())
         categorySettingsRepository = CategorySettingsRepository(FirebaseFirestore.getInstance())
+
+        if (epgMode) {
+            binding.txtTitle.text = "LIVE WITH EPG"
+            binding.edtSearch.hint = "Search EPG Categories"
+        }
 
         setupDrawerAndMenu()
         setupRecyclerViews()
         setupSearch()
-
         ensureInitialSyncThenLoad()
     }
 
@@ -79,50 +80,29 @@ class LiveCategoryActivity : BaseActivity() {
     private fun ensureInitialSyncThenLoad() {
         lifecycleScope.launch(Dispatchers.IO) {
             try {
-                val categories = repository.getCategories(
-                    server = prefs.getServer(),
-                    username = prefs.getUsername(),
-                    password = prefs.getPassword(),
-                    forceRefresh = false
-                )
-
+                val categories = repository.getCategories(server = prefs.getServer(), username = prefs.getUsername(), password = prefs.getPassword(), forceRefresh = false)
                 withContext(Dispatchers.Main) {
-                    if (categories.isNotEmpty()) {
-                        loadCategoriesFromDB()
-                    } else {
-                        forceRefreshData(isInitialSync = true)
-                    }
+                    if (categories.isNotEmpty()) loadCategoriesFromDB() else forceRefreshData(isInitialSync = true)
                 }
             } catch (e: Exception) {
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(this@LiveCategoryActivity, e.message ?: "Initial load failed", Toast.LENGTH_LONG).show()
-                }
+                withContext(Dispatchers.Main) { Toast.makeText(this@LiveCategoryActivity, e.message ?: "Initial load failed", Toast.LENGTH_LONG).show() }
             }
         }
     }
 
     private fun loadCategoriesFromDB() {
         binding.edtSearch.clearFocus()
-
         lifecycleScope.launch(Dispatchers.IO) {
             try {
-                val categories = repository.getCategories(
-                    server = prefs.getServer(),
-                    username = prefs.getUsername(),
-                    password = prefs.getPassword(),
-                    forceRefresh = false
-                )
+                val categories = repository.getCategories(server = prefs.getServer(), username = prefs.getUsername(), password = prefs.getPassword(), forceRefresh = false)
                 val disabled = categorySettingsRepository.getDisabledCategoryIds(prefs.getUsername())
                 val favoriteIds = favRepo.getFavoriteItemIds(prefs.getUsername(), "LIVE_CATEGORY")
-
                 withContext(Dispatchers.Main) {
                     disabledCategoryIds = disabled
                     updateUIWithCategories(categories, favoriteIds)
                 }
             } catch (e: Exception) {
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(this@LiveCategoryActivity, e.message ?: "Unknown Error", Toast.LENGTH_LONG).show()
-                }
+                withContext(Dispatchers.Main) { Toast.makeText(this@LiveCategoryActivity, e.message ?: "Unknown Error", Toast.LENGTH_LONG).show() }
             }
         }
     }
@@ -131,19 +111,12 @@ class LiveCategoryActivity : BaseActivity() {
         allCategories.clear()
         allCategories.addAll(categories.filterNot { disabledCategoryIds.contains(it.category_id) })
         categoryAdapter.updateList(allCategories)
-
         favoriteCategories.clear()
         favoriteCategories.addAll(allCategories.filter { favoriteIds.contains(it.category_id) })
-
         binding.txtCategoryCount.text = "${allCategories.size} Categories"
         favoriteAdapter.updateList(favoriteCategories)
         updateFavoritesSectionVisibility()
-
-        binding.rvCategories.post {
-            binding.rvCategories.postDelayed({
-                binding.rvCategories.layoutManager?.findViewByPosition(0)?.requestFocus()
-            }, 50)
-        }
+        binding.rvCategories.post { binding.rvCategories.postDelayed({ binding.rvCategories.layoutManager?.findViewByPosition(0)?.requestFocus() }, 50) }
     }
 
     private var isRefreshing = false
@@ -151,91 +124,42 @@ class LiveCategoryActivity : BaseActivity() {
     private fun forceRefreshData(isInitialSync: Boolean = false) {
         if (isRefreshing) return
         isRefreshing = true
-
         val msg = if (isInitialSync) "Downloading Categories for the first time…" else "Refreshing categories & channels…"
-
-        runCallbackSyncWithLoader(
-            loadingMessage = msg,
-            successMessage = "Channels Updated Successfully!"
-        ) { onSuccess, onError ->
-            repository.syncAllData(
-                server = prefs.getServer(),
-                username = prefs.getUsername(),
-                password = prefs.getPassword(),
-                callback = object : SyncCallback {
-                    override fun onSuccess() {
-                        lifecycleScope.launch(Dispatchers.Main) {
-                            isRefreshing = false
-                            prefs.setLastSyncTime(System.currentTimeMillis())
-                            onSuccess()
-                            loadCategoriesFromDB()
-                        }
-                    }
-                    override fun onError(message: String) {
-                        lifecycleScope.launch(Dispatchers.Main) {
-                            isRefreshing = false
-                            onError("Failed to refresh: $message")
-                        }
+        runCallbackSyncWithLoader(loadingMessage = msg, successMessage = "Channels Updated Successfully!") { onSuccess, onError ->
+            repository.syncAllData(server = prefs.getServer(), username = prefs.getUsername(), password = prefs.getPassword(), callback = object : SyncCallback {
+                override fun onSuccess() {
+                    lifecycleScope.launch(Dispatchers.Main) {
+                        isRefreshing = false
+                        prefs.setLastSyncTime(System.currentTimeMillis())
+                        onSuccess()
+                        loadCategoriesFromDB()
                     }
                 }
-            )
+                override fun onError(message: String) {
+                    lifecycleScope.launch(Dispatchers.Main) { isRefreshing = false; onError("Failed to refresh: $message") }
+                }
+            })
         }
     }
 
     private fun setupDrawerAndMenu() {
         binding.btnMore.setOnClickListener { openRightDrawer(binding.drawerLayout) }
-
-        setupOptionalRightDrawerMenu(
-            drawerLayout = binding.drawerLayout,
-            navView = binding.rightNav
-        ) { itemId ->
+        setupOptionalRightDrawerMenu(binding.drawerLayout, binding.rightNav) { itemId ->
             when (itemId) {
-                R.id.action_home -> {
-                    startActivity(Intent(this, DashboardActivity::class.java))
-                    finish()
-                    true
-                }
-                R.id.action_manage_categories -> {
-                    startActivity(Intent(this, ManageCategoriesActivity::class.java))
-                    true
-                }
-                R.id.action_refresh_all -> {
-                    forceRefreshData()
-                    true
-                }
-                R.id.action_refresh_guide -> {
-                    refreshTvGuide()
-                    true
-                }
-                R.id.action_settings -> {
-                    startActivity(Intent(this, SettingsActivity::class.java))
-                    true
-                }
-                R.id.action_logout -> {
-                    prefs.clear()
-                    startActivity(Intent(this, LoginActivity::class.java))
-                    finishAffinity()
-                    true
-                }
+                R.id.action_home -> { startActivity(Intent(this, DashboardActivity::class.java)); finish(); true }
+                R.id.action_manage_categories -> { startActivity(Intent(this, ManageCategoriesActivity::class.java)); true }
+                R.id.action_refresh_all -> { forceRefreshData(); true }
+                R.id.action_refresh_guide -> { refreshTvGuide(); true }
+                R.id.action_settings -> { startActivity(Intent(this, SettingsActivity::class.java)); true }
+                R.id.action_logout -> { prefs.clear(); startActivity(Intent(this, LoginActivity::class.java)); finishAffinity(); true }
                 else -> false
             }
         }
-
         binding.drawerLayout.addDrawerListener(object : DrawerLayout.SimpleDrawerListener() {
             override fun onDrawerOpened(drawerView: View) {
-                if (drawerView.id == binding.rightNav.id) {
-                    binding.rightNav.post {
-                        val menuView = binding.rightNav.getChildAt(0) as? NavigationMenuView
-                        if (menuView != null) {
-                            for (i in 0 until menuView.childCount) {
-                                val child = menuView.getChildAt(i)
-                                if (child.isFocusable) {
-                                    child.requestFocus()
-                                    break
-                                }
-                            }
-                        }
-                    }
+                if (drawerView.id == binding.rightNav.id) binding.rightNav.post {
+                    val menuView = binding.rightNav.getChildAt(0) as? NavigationMenuView
+                    if (menuView != null) for (i in 0 until menuView.childCount) { val child = menuView.getChildAt(i); if (child.isFocusable) { child.requestFocus(); break } }
                 }
             }
         })
@@ -245,51 +169,20 @@ class LiveCategoryActivity : BaseActivity() {
         val columns = if (resources.configuration.smallestScreenWidthDp >= 600) 6 else 3
         binding.rvCategories.layoutManager = GridLayoutManager(this, columns)
         binding.rvFavorite.layoutManager = LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
-
         val snapHelper = object : LinearSnapHelper() {
-            override fun calculateDistanceToFinalSnap(layoutManager: RecyclerView.LayoutManager, targetView: View): IntArray {
-                val out = IntArray(2)
-                val viewStart = targetView.left - layoutManager.getLeftDecorationWidth(targetView)
-                out[0] = viewStart - layoutManager.paddingLeft
-                out[1] = 0
-                return out
-            }
+            override fun calculateDistanceToFinalSnap(layoutManager: RecyclerView.LayoutManager, targetView: View): IntArray { val out = IntArray(2); val viewStart = targetView.left - layoutManager.getLeftDecorationWidth(targetView); out[0] = viewStart - layoutManager.paddingLeft; out[1] = 0; return out }
             override fun findSnapView(layoutManager: RecyclerView.LayoutManager): View? {
                 if (layoutManager !is LinearLayoutManager) return null
-                val firstVisible = layoutManager.findFirstVisibleItemPosition()
-                val firstView = layoutManager.findViewByPosition(0)
-                if (firstVisible == 0 && firstView != null) {
-                    val viewStart = firstView.left - layoutManager.getLeftDecorationWidth(firstView)
-                    val distance = abs(viewStart - layoutManager.paddingLeft)
-                    if (distance < firstView.width / 2) return null
-                }
-                var closestChild: View? = null
-                var closestDistance = Int.MAX_VALUE
-                for (i in 0 until layoutManager.childCount) {
-                    val child = layoutManager.getChildAt(i) ?: continue
-                    val viewStart = child.left - layoutManager.getLeftDecorationWidth(child)
-                    val distance = abs(viewStart - layoutManager.paddingLeft)
-                    if (distance < closestDistance) {
-                        closestDistance = distance
-                        closestChild = child
-                    }
-                }
+                val firstVisible = layoutManager.findFirstVisibleItemPosition(); val firstView = layoutManager.findViewByPosition(0)
+                if (firstVisible == 0 && firstView != null) { val viewStart = firstView.left - layoutManager.getLeftDecorationWidth(firstView); val distance = abs(viewStart - layoutManager.paddingLeft); if (distance < firstView.width / 2) return null }
+                var closestChild: View? = null; var closestDistance = Int.MAX_VALUE
+                for (i in 0 until layoutManager.childCount) { val child = layoutManager.getChildAt(i) ?: continue; val viewStart = child.left - layoutManager.getLeftDecorationWidth(child); val distance = abs(viewStart - layoutManager.paddingLeft); if (distance < closestDistance) { closestDistance = distance; closestChild = child } }
                 return closestChild
             }
         }
         snapHelper.attachToRecyclerView(binding.rvFavorite)
-
-        categoryAdapter = CategoryAdapter(
-            listener = { openCategory(it) },
-            onLongClick = { addToFavorites(it) }
-        )
-
-        favoriteAdapter = FavoriteCategoryAdapter(
-            columns = columns,
-            listener = { openCategory(it) },
-            onLongClick = { removeFromFavorites(it) }
-        )
-
+        categoryAdapter = CategoryAdapter(listener = { openCategory(it) }, onLongClick = { addToFavorites(it) })
+        favoriteAdapter = FavoriteCategoryAdapter(columns = columns, listener = { openCategory(it) }, onLongClick = { removeFromFavorites(it) })
         binding.rvCategories.adapter = categoryAdapter
         binding.rvFavorite.adapter = favoriteAdapter
         binding.rvCategories.setHasFixedSize(true)
@@ -297,15 +190,11 @@ class LiveCategoryActivity : BaseActivity() {
     }
 
     private fun setupSearch() {
-        binding.edtSearch.addTextChangedListener(
-            object : TextWatcher {
-                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                    filter(s.toString())
-                }
-                override fun afterTextChanged(s: Editable?) {}
-            }
-        )
+        binding.edtSearch.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { filter(s.toString()) }
+            override fun afterTextChanged(s: Editable?) {}
+        })
     }
 
     private fun filter(keyword: String) {
@@ -315,10 +204,17 @@ class LiveCategoryActivity : BaseActivity() {
 
     private fun openCategory(category: LiveCategory) {
         if (disabledCategoryIds.contains(category.category_id)) return
-        val intent = Intent(this, ChannelListActivity::class.java)
-        intent.putExtra("category_id", category.category_id)
-        intent.putExtra("category_name", category.category_name)
-        startActivity(intent)
+        if (epgMode) {
+            startActivity(Intent(this, EpgChannelListActivity::class.java).apply {
+                putExtra("category_id", category.category_id)
+                putExtra("category_name", category.category_name)
+            })
+        } else {
+            startActivity(Intent(this, ChannelListActivity::class.java).apply {
+                putExtra("category_id", category.category_id)
+                putExtra("category_name", category.category_name)
+            })
+        }
     }
 
     private fun addToFavorites(category: LiveCategory) {
@@ -326,19 +222,11 @@ class LiveCategoryActivity : BaseActivity() {
         lifecycleScope.launch {
             try {
                 val existing = favRepo.getFavoriteItemIds(userId, "LIVE_CATEGORY")
-                if (existing.contains(category.category_id)) {
-                    Toast.makeText(this@LiveCategoryActivity, "${category.category_name} already in Favorites", Toast.LENGTH_SHORT).show()
-                    return@launch
-                }
-
+                if (existing.contains(category.category_id)) { Toast.makeText(this@LiveCategoryActivity, "${category.category_name} already in Favorites", Toast.LENGTH_SHORT).show(); return@launch }
                 favRepo.addFavorite(userId, "LIVE_CATEGORY", category.category_id)
-                favoriteCategories.add(category)
-                favoriteAdapter.updateList(favoriteCategories)
-                updateFavoritesSectionVisibility()
+                favoriteCategories.add(category); favoriteAdapter.updateList(favoriteCategories); updateFavoritesSectionVisibility()
                 Toast.makeText(this@LiveCategoryActivity, "${category.category_name} added to Favorites", Toast.LENGTH_SHORT).show()
-            } catch (_: Exception) {
-                Toast.makeText(this@LiveCategoryActivity, "Could not save category favorite", Toast.LENGTH_SHORT).show()
-            }
+            } catch (_: Exception) { Toast.makeText(this@LiveCategoryActivity, "Could not save category favorite", Toast.LENGTH_SHORT).show() }
         }
     }
 
@@ -346,13 +234,9 @@ class LiveCategoryActivity : BaseActivity() {
         lifecycleScope.launch {
             try {
                 favRepo.removeFavorite(prefs.getUsername(), "LIVE_CATEGORY", category.category_id)
-                favoriteCategories.removeAll { it.category_id == category.category_id }
-                favoriteAdapter.updateList(favoriteCategories)
-                updateFavoritesSectionVisibility()
+                favoriteCategories.removeAll { it.category_id == category.category_id }; favoriteAdapter.updateList(favoriteCategories); updateFavoritesSectionVisibility()
                 Toast.makeText(this@LiveCategoryActivity, "${category.category_name} removed from Favorites", Toast.LENGTH_SHORT).show()
-            } catch (_: Exception) {
-                Toast.makeText(this@LiveCategoryActivity, "Could not update category favorite", Toast.LENGTH_SHORT).show()
-            }
+            } catch (_: Exception) { Toast.makeText(this@LiveCategoryActivity, "Could not update category favorite", Toast.LENGTH_SHORT).show() }
         }
     }
 
