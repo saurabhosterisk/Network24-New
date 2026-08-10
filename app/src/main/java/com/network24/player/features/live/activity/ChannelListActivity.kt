@@ -364,7 +364,7 @@ class ChannelListActivity : BaseActivity() {
         // Re-attach the shared ExoPlayer after returning from the full-screen player.
         // Full-screen channel changes update PlayerState.currentPosition, so resolve
         // the selected row by stream_id instead of assuming both lists still have the
-        // same position. This keeps the selector and playing icon synchronized.
+        // same position. Keep selector, playing icon, title and EPG synchronized too.
         if (isGoingToFullscreen) {
             isGoingToFullscreen = false
 
@@ -380,10 +380,24 @@ class ChannelListActivity : BaseActivity() {
                 if (listPosition >= 0) {
                     previewPosition = listPosition
                     adapter.setPlaying(listPosition)
+
+                    // The shared ExoPlayer is already on this channel. Do not call
+                    // showPreview(), because that would unnecessarily restart it.
+                    binding.txtOverlayChannel.text = playingChannel.name ?: ""
+                    binding.txtOverlayProgram.text = "Loading TV Guide..."
+                    binding.txtNowTitle.text = "Loading TV Guide..."
+                    binding.txtNowTime.text = ""
+                    binding.txtNextTitle.text = ""
+                    binding.txtNextTime.text = ""
+                    loadProgramGuide(playingChannel)
+
                     binding.rvChannels.post {
-                        binding.rvChannels.findViewHolderForAdapterPosition(listPosition)
-                            ?.itemView
-                            ?.requestFocus()
+                        binding.rvChannels.scrollToPosition(listPosition)
+                        binding.rvChannels.post {
+                            binding.rvChannels.findViewHolderForAdapterPosition(listPosition)
+                                ?.itemView
+                                ?.requestFocus()
+                        }
                     }
                 }
             }
