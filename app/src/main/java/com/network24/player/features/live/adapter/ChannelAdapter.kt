@@ -32,6 +32,7 @@ class ChannelAdapter(
     private val epgScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var epgJob: Job? = null
     private var epgChannelId: String? = null
+    private var attachedRecyclerView: RecyclerView? = null
 
     inner class ChannelVH(val binding: ItemChannelBinding) : RecyclerView.ViewHolder(binding.root)
 
@@ -191,9 +192,33 @@ class ChannelAdapter(
         playingPosition = position
         if (old != RecyclerView.NO_POSITION) notifyItemChanged(old)
         if (position != RecyclerView.NO_POSITION) notifyItemChanged(position)
+
+        // RecyclerView only creates ViewHolders for visible rows. When fullscreen
+        // playback moves 10/20/etc. channels away, the playing row is therefore not
+        // available to requestFocus() until the list is scrolled to it. Always bring
+        // the actual playing row into the viewport first, then request DPAD focus.
+        if (position in channels.indices) {
+            attachedRecyclerView?.post {
+                val recyclerView = attachedRecyclerView ?: return@post
+                recyclerView.scrollToPosition(position)
+                recyclerView.post {
+                    recyclerView.findViewHolderForAdapterPosition(position)
+                        ?.itemView
+                        ?.requestFocus()
+                }
+            }
+        }
+    }
+
+    override fun onAttachedToRecyclerView(recyclerView: RecyclerView) {
+        super.onAttachedToRecyclerView(recyclerView)
+        attachedRecyclerView = recyclerView
     }
 
     override fun onDetachedFromRecyclerView(recyclerView: RecyclerView) {
+        if (attachedRecyclerView === recyclerView) {
+            attachedRecyclerView = null
+        }
         epgJob?.cancel()
         epgScope.cancel()
         super.onDetachedFromRecyclerView(recyclerView)
