@@ -2,7 +2,6 @@ package com.network24.player.features.live.activity
 
 import android.graphics.Color
 import android.os.Bundle
-import android.view.View
 import android.widget.TextView
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -57,21 +56,35 @@ class EpgChannelListActivity : BaseActivity() {
     }
 
     /**
-     * Live TV already has the correct channel/category relationship in Room.
-     * The EPG screen must use that exact same source instead of maintaining a
-     * second category-loading implementation.
-     *
-     * We first resolve the category against the cached LIVE categories by id or
-     * name, then read the same channels table used by ChannelListActivity. Only
-     * if the local table is empty do we ask LiveRepository to refresh it.
+     * Convert the Room ChannelEntity into the same LiveChannel model expected
+     * by the EPG adapter. We intentionally do this locally here instead of
+     * depending on a mapper extension whose package/name is not guaranteed.
+     */
+    private fun com.network24.player.core.database.entity.ChannelEntity.toEpgLiveChannel(): LiveChannel {
+        return LiveChannel(
+            num = num,
+            name = name,
+            stream_type = streamType,
+            stream_id = streamId,
+            stream_icon = icon,
+            epg_channel_id = epgChannelId,
+            added = added,
+            category_id = categoryId,
+            custom_sid = customSid,
+            tv_archive = tvArchive,
+            tv_archive_duration = tvArchiveDuration,
+            direct_source = directSource
+        )
+    }
+
+    /**
+     * Live TV and Live With EPG use the same Room channels table.
+     * The category ID passed by LiveCategoryActivity is the authoritative link.
      */
     private suspend fun getChannelsForEpg(): List<LiveChannel> {
         val db = DatabaseProvider.get(this@EpgChannelListActivity)
-
         var resolvedCategoryId = categoryId
 
-        // Resolve by the category name as a safety net. This is important when
-        // the category list and channel cache were created by different syncs.
         if (resolvedCategoryId.isBlank()) {
             val categories = repository.getCategories(
                 server = prefs.getServer(),
@@ -84,49 +97,37 @@ class EpgChannelListActivity : BaseActivity() {
             }?.category_id?.trim().orEmpty()
         }
 
-        // EXACTLY the same local source used by LiveRepository/Live TV.
-        var result = if (resolvedCategoryId.isNotBlank()) {
-            db.channelDao().getByCategory(resolvedCategoryId).map { it.toLiveChannel() }
-        } else {
-            emptyList()
-        }
+        if (resolvedCategoryId.isBlank()) return emptyList()
 
-        // If Room has the channels, do not perform another network call.
-        if (result.isNotEmpty()) return result
-
-        // Repository path is the same source used by ChannelListActivity and can
-        // populate Room when this is a first-load/empty-cache situation.
-        if (resolvedCategoryId.isNotBlank()) {
-            result = repository.getChannels(
-                server = prefs.getServer(),
-                username = prefs.getUsername(),
-                password = prefs.getPassword(),
-                categoryId = resolvedCategoryId,
-                forceRefresh = false
-            )
-        }
+        var result = db.channelDao()
+            .getByCategory(resolvedCategoryId)
+            .map { it.toEpgLiveChannel() }
 
         if (result.isNotEmpty()) return result
 
-        // One controlled refresh. This is intentionally the last resort so the
-        // EPG screen does not create repeated Xtream calls while navigating.
-        if (resolvedCategoryId.isNotBlank()) {
-            result = repository.getChannels(
-                server = prefs.getServer(),
-                username = prefs.getUsername(),
-                password = prefs.getPassword(),
-                categoryId = resolvedCategoryId,
-                forceRefresh = true
-            )
-        }
+        result = repository.getChannels(
+            server = prefs.getServer(),
+            username = prefs.getUsername(),
+            password = prefs.getPassword(),
+            categoryId = resolvedCategoryId,
+            forceRefresh = false
+        )
 
-        // Final local fallback after the refresh, again using the same Room table
-        // as Live TV.
-        if (result.isEmpty() && resolvedCategoryId.isNotBlank()) {
-            result = db.channelDao().getByCategory(resolvedCategoryId).map { it.toLiveChannel() }
-        }
+        if (result.isNotEmpty()) return result
 
-        return result
+        result = repository.getChannels(
+            server = prefs.getServer(),
+            username = prefs.getUsername(),
+            password = prefs.getPassword(),
+            categoryId = resolvedCategoryId,
+            forceRefresh = true
+        )
+
+        if (result.isNotEmpty()) return result
+
+        return db.channelDao()
+            .getByCategory(resolvedCategoryId)
+            .map { it.toEpgLiveChannel() }
     }
 
     private fun loadChannels() {
