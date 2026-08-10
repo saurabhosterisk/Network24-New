@@ -18,6 +18,7 @@ object PlayerManager {
 
     private var exoPlayer: ExoPlayer? = null
     private var currentUrl: String? = null
+    private var lastStreamUrl: String? = null
     private var currentPlayerView: PlayerView? = null
     private var ownerActivity: Activity? = null
     private var lifecycleCallbacksRegistered = false
@@ -29,12 +30,7 @@ object PlayerManager {
     private var lastPlaybackState = Player.STATE_IDLE
 
     private val loadControl = DefaultLoadControl.Builder()
-        .setBufferDurationsMs(
-            20_000,
-            60_000,
-            3_000,
-            6_000
-        )
+        .setBufferDurationsMs(20_000, 60_000, 3_000, 6_000)
         .build()
 
     private fun ensureActivityLifecycleCallbacks(context: Context) {
@@ -50,9 +46,6 @@ object PlayerManager {
             override fun onActivityDestroyed(activity: Activity) = Unit
 
             override fun onActivityStopped(activity: Activity) {
-                // The player belongs to the activity that currently hosts its PlayerView.
-                // When that activity is no longer visible, terminate the stream so the
-                // Xtream/HLS connection is not left running in the background.
                 if (ownerActivity === activity) {
                     release()
                     ownerActivity = null
@@ -109,10 +102,23 @@ object PlayerManager {
         if (context is Activity) ownerActivity = context
 
         val player = getPlayer(context)
-        if (currentPlayerView === playerView) return
-        currentPlayerView?.player = null
-        playerView.player = player
-        currentPlayerView = playerView
+        if (currentPlayerView !== playerView) {
+            currentPlayerView?.player = null
+            playerView.player = player
+            currentPlayerView = playerView
+        }
+
+        // If the previous hosting activity left the screen and released the
+        // player, reconnect the same channel when the activity comes back.
+        if (currentUrl == null && !lastStreamUrl.isNullOrBlank()) {
+            currentUrl = lastStreamUrl
+            resetDiagnostics()
+            player.stop()
+            player.clearMediaItems()
+            player.setMediaItem(MediaItem.fromUri(lastStreamUrl!!))
+            player.prepare()
+            player.play()
+        }
     }
 
     fun detach(playerView: PlayerView) {
@@ -131,6 +137,7 @@ object PlayerManager {
         attach(context, playerView)
 
         if (currentUrl == streamUrl) {
+            lastStreamUrl = streamUrl
             if (player.playbackState == Player.STATE_IDLE || player.playbackState == Player.STATE_ENDED) {
                 player.prepare()
             }
@@ -139,6 +146,7 @@ object PlayerManager {
         }
 
         currentUrl = streamUrl
+        lastStreamUrl = streamUrl
         resetDiagnostics()
         player.stop()
         player.clearMediaItems()
@@ -155,6 +163,7 @@ object PlayerManager {
         exoPlayer?.release()
         exoPlayer = null
         currentUrl = null
+        lastStreamUrl = null
         resetDiagnostics()
     }
 
@@ -175,6 +184,9 @@ object PlayerManager {
     }
 
     fun release() {
+        // Keep the last URL only so a screen that comes back can reconnect.
+        // The actual ExoPlayer, media items and HTTP/HLS connection are released.
+        if (!currentUrl.isNullOrBlank()) lastStreamUrl = currentUrl
         currentPlayerView?.player = null
         currentPlayerView = null
         exoPlayer?.stop()
