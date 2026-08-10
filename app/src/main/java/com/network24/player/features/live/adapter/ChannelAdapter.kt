@@ -67,8 +67,10 @@ class ChannelAdapter(
             val pos = holder.bindingAdapterPosition
             if (pos == RecyclerView.NO_POSITION) return@setOnFocusChangeListener
 
-            // Fire Stick / Android TV: update EPG immediately when the channel
-            // receives DPAD focus. No OK/Select press is required.
+            // Fire Stick / Android TV: update only the EPG card for the channel
+            // currently receiving DPAD focus. The compact EPG text directly under
+            // the player/overlay title belongs to the channel that is actually
+            // playing and must not change just because focus moved.
             loadSideEpg(view, channel)
             onFocused(channel, pos)
         }
@@ -89,9 +91,13 @@ class ChannelAdapter(
     }
 
     /**
-     * Updates the existing EPG TextViews on focus.
-     * The original compact EPG layout stays untouched and no extra TV GUIDE
-     * heading/card is created.
+     * Updates only the EPG TextViews belonging to the channel-list EPG card.
+     *
+     * IMPORTANT: txtOverlayProgram is intentionally NOT changed here. That field
+     * is the compact EPG shown directly below the player/channel title and must
+     * always describe the channel that is actually playing. DPAD focus can move
+     * independently of playback, so only the lower highlighted-channel EPG card
+     * should follow focus.
      */
     private fun loadSideEpg(itemView: View, channel: LiveChannel) {
         val epgId = channel.epg_channel_id ?: channel.stream_id?.toString() ?: return
@@ -107,7 +113,6 @@ class ChannelAdapter(
                 val nowTime = root.findViewById<TextView>(R.id.txtNowTime) ?: return@launch
                 val nextTitle = root.findViewById<TextView>(R.id.txtNextTitle) ?: return@launch
                 val nextTime = root.findViewById<TextView>(R.id.txtNextTime) ?: return@launch
-                val overlayProgram = root.findViewById<TextView>(R.id.txtOverlayProgram)
 
                 val programs = DatabaseProvider.get(itemView.context)
                     .epgDao()
@@ -135,11 +140,9 @@ class ChannelAdapter(
                 if (current != null) {
                     nowTitle.text = current.title ?: "No Program Info"
                     nowTime.text = "${formatTime(current.startTimestamp)} - ${formatTime(current.stopTimestamp)}"
-                    overlayProgram?.text = current.title ?: ""
                 } else {
                     nowTitle.text = "No EPG"
                     nowTime.text = ""
-                    overlayProgram?.text = ""
                 }
 
                 if (next != null) {
