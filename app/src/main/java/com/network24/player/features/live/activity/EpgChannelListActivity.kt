@@ -30,6 +30,7 @@ class EpgChannelListActivity : BaseActivity() {
     private lateinit var adapter: EpgChannelAdapter
     private val channels = mutableListOf<LiveChannel>()
     private lateinit var categoryId: String
+    private var categoryName: String = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -37,8 +38,10 @@ class EpgChannelListActivity : BaseActivity() {
         setContentView(binding.root)
         prefs = PreferenceManager(this)
         repository = LiveRepository(this)
-        categoryId = intent.getStringExtra("category_id") ?: ""
-        binding.txtCategoryName.text = intent.getStringExtra("category_name") ?: "LIVE WITH EPG"
+
+        categoryId = intent.getStringExtra("category_id")?.trim().orEmpty()
+        categoryName = intent.getStringExtra("category_name")?.trim().orEmpty()
+        binding.txtCategoryName.text = categoryName.ifBlank { "LIVE WITH EPG" }
         binding.btnBack.setOnClickListener { finish() }
 
         binding.rvChannels.layoutManager = LinearLayoutManager(this)
@@ -53,39 +56,74 @@ class EpgChannelListActivity : BaseActivity() {
         loadChannels()
     }
 
+    /**
+     * Live TV already has the correct channel/category relationship in Room.
+     * The EPG screen must use that exact same source instead of maintaining a
+     * second category-loading implementation.
+     *
+     * We first resolve the category against the cached LIVE categories by id or
+     * name, then read the same channels table used by ChannelListActivity. Only
+     * if the local table is empty do we ask LiveRepository to refresh it.
+     */
     private suspend fun getChannelsForEpg(): List<LiveChannel> {
-        var result = repository.getChannels(
-            server = prefs.getServer(),
-            username = prefs.getUsername(),
-            password = prefs.getPassword(),
-            categoryId = categoryId,
-            forceRefresh = false
-        )
+        val db = DatabaseProvider.get(this@EpgChannelListActivity)
 
-        // The normal Live TV path can already have the category cached. If this
-        // dedicated screen gets an empty category, refresh once before giving up.
-        if (result.isEmpty()) {
+        var resolvedCategoryId = categoryId
+
+        // Resolve by the category name as a safety net. This is important when
+        // the category list and channel cache were created by different syncs.
+        if (resolvedCategoryId.isBlank()) {
+            val categories = repository.getCategories(
+                server = prefs.getServer(),
+                username = prefs.getUsername(),
+                password = prefs.getPassword(),
+                forceRefresh = false
+            )
+            resolvedCategoryId = categories.firstOrNull {
+                it.category_name.trim().equals(categoryName, ignoreCase = true)
+            }?.category_id?.trim().orEmpty()
+        }
+
+        // EXACTLY the same local source used by LiveRepository/Live TV.
+        var result = if (resolvedCategoryId.isNotBlank()) {
+            db.channelDao().getByCategory(resolvedCategoryId).map { it.toLiveChannel() }
+        } else {
+            emptyList()
+        }
+
+        // If Room has the channels, do not perform another network call.
+        if (result.isNotEmpty()) return result
+
+        // Repository path is the same source used by ChannelListActivity and can
+        // populate Room when this is a first-load/empty-cache situation.
+        if (resolvedCategoryId.isNotBlank()) {
             result = repository.getChannels(
                 server = prefs.getServer(),
                 username = prefs.getUsername(),
                 password = prefs.getPassword(),
-                categoryId = categoryId,
+                categoryId = resolvedCategoryId,
+                forceRefresh = false
+            )
+        }
+
+        if (result.isNotEmpty()) return result
+
+        // One controlled refresh. This is intentionally the last resort so the
+        // EPG screen does not create repeated Xtream calls while navigating.
+        if (resolvedCategoryId.isNotBlank()) {
+            result = repository.getChannels(
+                server = prefs.getServer(),
+                username = prefs.getUsername(),
+                password = prefs.getPassword(),
+                categoryId = resolvedCategoryId,
                 forceRefresh = true
             )
         }
 
-        // Final safety net: use the complete local channel list and filter it by
-        // category. This avoids an empty EPG screen when the category index/cache
-        // is temporarily out of sync with the channel table.
-        if (result.isEmpty()) {
-            val all = repository.getChannels(
-                server = prefs.getServer(),
-                username = prefs.getUsername(),
-                password = prefs.getPassword(),
-                categoryId = "all",
-                forceRefresh = false
-            )
-            result = all.filter { it.category_id == categoryId }
+        // Final local fallback after the refresh, again using the same Room table
+        // as Live TV.
+        if (result.isEmpty() && resolvedCategoryId.isNotBlank()) {
+            result = db.channelDao().getByCategory(resolvedCategoryId).map { it.toLiveChannel() }
         }
 
         return result
@@ -107,7 +145,11 @@ class EpgChannelListActivity : BaseActivity() {
                         binding.rvChannels.findViewHolderForAdapterPosition(0)?.itemView?.requestFocus()
                     }
                 } else {
-                    binding.txtEpgStatus.text = "No channels available in this category"
+                    binding.txtEpgStatus.text = if (categoryId.isBlank() && categoryName.isBlank()) {
+                        "Unable to identify this category"
+                    } else {
+                        "No channels available in this category"
+                    }
                 }
             } catch (e: Exception) {
                 binding.txtEpgStatus.text = e.message ?: "Unable to load channels"
