@@ -7,16 +7,13 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.network24.player.R
 import com.network24.player.core.base.BaseActivity
-import com.network24.player.core.database.DatabaseProvider
 import com.network24.player.core.preferences.PreferenceManager
 import com.network24.player.databinding.ActivityEpgChannelListBinding
 import com.network24.player.features.live.adapter.EpgChannelAdapter
 import com.network24.player.features.live.models.LiveChannel
 import com.network24.player.features.live.repository.LiveRepository
 import com.network24.player.features.player.manager.PlayerManager
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -35,9 +32,12 @@ class EpgChannelListActivity : BaseActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityEpgChannelListBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
         prefs = PreferenceManager(this)
         repository = LiveRepository(this)
 
+        // These are the exact same extras used by LiveCategoryActivity when it
+        // opens ChannelListActivity. Do not resolve the category a second time.
         categoryId = intent.getStringExtra("category_id")?.trim().orEmpty()
         categoryName = intent.getStringExtra("category_name")?.trim().orEmpty()
         binding.txtCategoryName.text = categoryName.ifBlank { "LIVE WITH EPG" }
@@ -56,101 +56,54 @@ class EpgChannelListActivity : BaseActivity() {
     }
 
     /**
-     * Convert the Room ChannelEntity into the same LiveChannel model expected
-     * by the EPG adapter. We intentionally do this locally here instead of
-     * depending on a mapper extension whose package/name is not guaranteed.
+     * IMPORTANT: Live With EPG deliberately uses the exact same repository
+     * call as normal Live TV. ChannelListActivity does not query Room directly;
+     * it calls LiveRepository.getChannels(categoryId). Keeping one source of
+     * truth prevents the two screens from disagreeing about channel data.
      */
-    private fun com.network24.player.core.database.entity.ChannelEntity.toEpgLiveChannel(): LiveChannel {
-        return LiveChannel(
-            num = num,
-            name = name,
-            stream_type = streamType,
-            stream_id = streamId,
-            stream_icon = icon,
-            epg_channel_id = epgChannelId,
-            added = added,
-            category_id = categoryId,
-            custom_sid = customSid,
-            tv_archive = tvArchive,
-            tv_archive_duration = tvArchiveDuration,
-            direct_source = directSource
-        )
-    }
-
-    /**
-     * Live TV and Live With EPG use the same Room channels table.
-     * The category ID passed by LiveCategoryActivity is the authoritative link.
-     */
-    private suspend fun getChannelsForEpg(): List<LiveChannel> {
-        val db = DatabaseProvider.get(this@EpgChannelListActivity)
-        var resolvedCategoryId = categoryId
-
-        if (resolvedCategoryId.isBlank()) {
-            val categories = repository.getCategories(
-                server = prefs.getServer(),
-                username = prefs.getUsername(),
-                password = prefs.getPassword(),
-                forceRefresh = false
-            )
-            resolvedCategoryId = categories.firstOrNull {
-                it.category_name.trim().equals(categoryName, ignoreCase = true)
-            }?.category_id?.trim().orEmpty()
-        }
-
-        if (resolvedCategoryId.isBlank()) return emptyList()
-
-        var result = db.channelDao()
-            .getByCategory(resolvedCategoryId)
-            .map { it.toEpgLiveChannel() }
-
-        if (result.isNotEmpty()) return result
-
-        result = repository.getChannels(
-            server = prefs.getServer(),
-            username = prefs.getUsername(),
-            password = prefs.getPassword(),
-            categoryId = resolvedCategoryId,
-            forceRefresh = false
-        )
-
-        if (result.isNotEmpty()) return result
-
-        result = repository.getChannels(
-            server = prefs.getServer(),
-            username = prefs.getUsername(),
-            password = prefs.getPassword(),
-            categoryId = resolvedCategoryId,
-            forceRefresh = true
-        )
-
-        if (result.isNotEmpty()) return result
-
-        return db.channelDao()
-            .getByCategory(resolvedCategoryId)
-            .map { it.toEpgLiveChannel() }
-    }
-
     private fun loadChannels() {
         binding.txtEpgStatus.text = "Loading channels…"
+
         lifecycleScope.launch {
             try {
-                val result = withContext(Dispatchers.IO) { getChannelsForEpg() }
+                if (categoryId.isBlank()) {
+                    binding.txtEpgStatus.text = "Invalid category"
+                    return@launch
+                }
+
+                var result = repository.getChannels(
+                    server = prefs.getServer(),
+                    username = prefs.getUsername(),
+                    password = prefs.getPassword(),
+                    categoryId = categoryId,
+                    forceRefresh = false
+                )
+
+                // This is the same recovery used by Live TV when its category
+                // has no local data. It is deliberately only a fallback.
+                if (result.isEmpty()) {
+                    result = repository.getChannels(
+                        server = prefs.getServer(),
+                        username = prefs.getUsername(),
+                        password = prefs.getPassword(),
+                        categoryId = categoryId,
+                        forceRefresh = true
+                    )
+                }
+
                 channels.clear()
                 channels.addAll(result)
                 adapter.updateData(channels)
 
-                if (channels.isNotEmpty()) {
-                    binding.txtEpgStatus.text = "${channels.size} channels"
-                    binding.rvChannels.post {
-                        binding.rvChannels.scrollToPosition(0)
-                        binding.rvChannels.findViewHolderForAdapterPosition(0)?.itemView?.requestFocus()
-                    }
-                } else {
-                    binding.txtEpgStatus.text = if (categoryId.isBlank() && categoryName.isBlank()) {
-                        "Unable to identify this category"
-                    } else {
-                        "No channels available in this category"
-                    }
+                if (channels.isEmpty()) {
+                    binding.txtEpgStatus.text = "No channels available in this category"
+                    return@launch
+                }
+
+                binding.txtEpgStatus.text = "${channels.size} channels"
+                binding.rvChannels.post {
+                    binding.rvChannels.scrollToPosition(0)
+                    binding.rvChannels.findViewHolderForAdapterPosition(0)?.itemView?.requestFocus()
                 }
             } catch (e: Exception) {
                 binding.txtEpgStatus.text = e.message ?: "Unable to load channels"
@@ -171,6 +124,7 @@ class EpgChannelListActivity : BaseActivity() {
         val epgId = channel.epg_channel_id ?: channel.stream_id?.toString()
         binding.txtChannelTitle.text = channel.name ?: "Unknown Channel"
         binding.txtEpgStatus.text = "Loading EPG…"
+
         if (epgId.isNullOrBlank()) {
             binding.txtEpgStatus.text = "No EPG channel ID available"
             binding.epgContainer.removeAllViews()
@@ -179,30 +133,22 @@ class EpgChannelListActivity : BaseActivity() {
 
         lifecycleScope.launch {
             try {
-                val programs = withContext(Dispatchers.IO) {
-                    DatabaseProvider.get(this@EpgChannelListActivity)
-                        .epgDao()
-                        .getByEpgChannelId(epgId)
-                }
-                val now = System.currentTimeMillis()
-                val visible = programs.filter {
-                    (it.startTimestamp ?: 0L) > 0L && (it.stopTimestamp ?: 0L) > now
-                }.sortedBy { it.startTimestamp }
-
-                val current = visible.firstOrNull {
-                    val start = it.startTimestamp ?: 0L
-                    val stop = it.stopTimestamp ?: 0L
-                    start <= now && stop > now
-                }
-                val next = visible.firstOrNull { it !== current && (it.startTimestamp ?: 0L) > now }
-                val upcoming = visible.filter { it !== current && it !== next }.take(12)
+                val (nowEpg, nextEpg) = repository.getNowNextEpg(epgId)
 
                 binding.epgContainer.removeAllViews()
-                if (current != null) addProgram("NOW", current.title ?: "No Program Info", current.startTimestamp, current.stopTimestamp, true)
-                if (next != null) addProgram("NEXT", next.title ?: "", next.startTimestamp, next.stopTimestamp, false)
-                upcoming.forEach { addProgram("UPCOMING", it.title ?: "", it.startTimestamp, it.stopTimestamp, false) }
+                if (nowEpg != null) {
+                    addProgram("NOW", nowEpg.title ?: "No Program Info", nowEpg.startTimestamp, nowEpg.stopTimestamp, true)
+                }
+                if (nextEpg != null) {
+                    addProgram("NEXT", nextEpg.title ?: "", nextEpg.startTimestamp, nextEpg.stopTimestamp, false)
+                }
 
-                binding.txtEpgStatus.text = if (visible.isEmpty()) "No EPG available for this channel" else "${visible.size} EPG entries available"
+                binding.txtEpgStatus.text = when {
+                    nowEpg != null && nextEpg != null -> "Current & next program"
+                    nowEpg != null -> "Current program"
+                    nextEpg != null -> "Next program"
+                    else -> "No EPG available for this channel"
+                }
             } catch (_: Exception) {
                 binding.txtEpgStatus.text = "EPG unavailable"
                 binding.epgContainer.removeAllViews()
