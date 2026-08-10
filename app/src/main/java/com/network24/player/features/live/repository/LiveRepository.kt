@@ -84,9 +84,6 @@ class LiveRepository(private val context: Context) {
         val safeCategoryId = if (categoryId.isBlank()) "all" else categoryId
         val memKey = MemKeys.liveChannels(safeCategoryId)
 
-        // A forced refresh must bypass both memory and Room cache. Previously the
-        // memory cache was checked even when forceRefresh=true, which meant an
-        // empty/stale category result could never be repaired by the refresh path.
         if (!forceRefresh) {
             MemoryCache.get<List<LiveChannel>>(memKey)?.let { return it }
         }
@@ -160,6 +157,43 @@ class LiveRepository(private val context: Context) {
 
         MemoryCache.put(memKey, result, CacheTtl.EPG_MS)
         return result
+    }
+
+    /**
+     * Returns the complete EPG stored for one channel, limited to the next
+     * [days] days. If local XMLTV data is missing, fetches the full guide once
+     * and retries the local query. The provider remains the source of truth for
+     * how many future days are actually available.
+     */
+    suspend fun getFullEpg(
+        epgChannelId: String,
+        days: Int = 3,
+        forceRefresh: Boolean = false
+    ): List<com.network24.player.core.database.entity.EpgEntity> {
+        if (epgChannelId.isBlank()) return emptyList()
+
+        val safeDays = days.coerceIn(1, 3)
+        val now = System.currentTimeMillis()
+        val end = now + safeDays * 24L * 60L * 60L * 1000L
+        val memKey = "epg_full_${epgChannelId}_${safeDays}"
+
+        if (!forceRefresh) {
+            MemoryCache.get<List<com.network24.player.core.database.entity.EpgEntity>>(memKey)?.let { return it }
+        }
+
+        var listings = db.epgDao().getByEpgChannelId(epgChannelId)
+            .filter { (it.stopTimestamp ?: 0L) > now && (it.startTimestamp ?: Long.MAX_VALUE) < end }
+
+        if (listings.isEmpty()) {
+            val syncResult = sync.syncFullEpg(force = true)
+            if (syncResult is SyncResult.Error) throw Exception(syncResult.message)
+
+            listings = db.epgDao().getByEpgChannelId(epgChannelId)
+                .filter { (it.stopTimestamp ?: 0L) > now && (it.startTimestamp ?: Long.MAX_VALUE) < end }
+        }
+
+        MemoryCache.put(memKey, listings, CacheTtl.EPG_MS)
+        return listings
     }
 
 }
