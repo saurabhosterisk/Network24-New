@@ -1,6 +1,5 @@
 package com.network24.player.features.live.activity
 
-import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import android.view.View
@@ -12,11 +11,9 @@ import com.network24.player.core.base.BaseActivity
 import com.network24.player.core.database.DatabaseProvider
 import com.network24.player.core.preferences.PreferenceManager
 import com.network24.player.databinding.ActivityEpgChannelListBinding
-import com.network24.player.features.dashboard.activity.DashboardActivity
 import com.network24.player.features.live.adapter.EpgChannelAdapter
 import com.network24.player.features.live.models.LiveChannel
 import com.network24.player.features.live.repository.LiveRepository
-import com.network24.player.features.login.activity.LoginActivity
 import com.network24.player.features.player.manager.PlayerManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -56,25 +53,61 @@ class EpgChannelListActivity : BaseActivity() {
         loadChannels()
     }
 
+    private suspend fun getChannelsForEpg(): List<LiveChannel> {
+        var result = repository.getChannels(
+            server = prefs.getServer(),
+            username = prefs.getUsername(),
+            password = prefs.getPassword(),
+            categoryId = categoryId,
+            forceRefresh = false
+        )
+
+        // The normal Live TV path can already have the category cached. If this
+        // dedicated screen gets an empty category, refresh once before giving up.
+        if (result.isEmpty()) {
+            result = repository.getChannels(
+                server = prefs.getServer(),
+                username = prefs.getUsername(),
+                password = prefs.getPassword(),
+                categoryId = categoryId,
+                forceRefresh = true
+            )
+        }
+
+        // Final safety net: use the complete local channel list and filter it by
+        // category. This avoids an empty EPG screen when the category index/cache
+        // is temporarily out of sync with the channel table.
+        if (result.isEmpty()) {
+            val all = repository.getChannels(
+                server = prefs.getServer(),
+                username = prefs.getUsername(),
+                password = prefs.getPassword(),
+                categoryId = "all",
+                forceRefresh = false
+            )
+            result = all.filter { it.category_id == categoryId }
+        }
+
+        return result
+    }
+
     private fun loadChannels() {
+        binding.txtEpgStatus.text = "Loading channels…"
         lifecycleScope.launch {
             try {
-                val result = withContext(Dispatchers.IO) {
-                    repository.getChannels(
-                        server = prefs.getServer(),
-                        username = prefs.getUsername(),
-                        password = prefs.getPassword(),
-                        categoryId = categoryId,
-                        forceRefresh = false
-                    )
-                }
+                val result = withContext(Dispatchers.IO) { getChannelsForEpg() }
                 channels.clear()
                 channels.addAll(result)
                 adapter.updateData(channels)
+
                 if (channels.isNotEmpty()) {
+                    binding.txtEpgStatus.text = "${channels.size} channels"
                     binding.rvChannels.post {
+                        binding.rvChannels.scrollToPosition(0)
                         binding.rvChannels.findViewHolderForAdapterPosition(0)?.itemView?.requestFocus()
                     }
+                } else {
+                    binding.txtEpgStatus.text = "No channels available in this category"
                 }
             } catch (e: Exception) {
                 binding.txtEpgStatus.text = e.message ?: "Unable to load channels"
@@ -152,9 +185,5 @@ class EpgChannelListActivity : BaseActivity() {
     private fun formatTime(timestamp: Long?): String {
         if (timestamp == null || timestamp <= 0L) return ""
         return SimpleDateFormat("hh:mm a", Locale.getDefault()).format(Date(timestamp))
-    }
-
-    override fun onBackPressed() {
-        super.onBackPressed()
     }
 }
