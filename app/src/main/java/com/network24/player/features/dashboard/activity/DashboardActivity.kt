@@ -44,11 +44,7 @@ import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 class DashboardActivity : BaseActivity() {
-    private companion object {
-        private const val REQ_POST_NOTIFICATIONS = 9001
-        private const val PAYMENT_URL = "https://osterisktechnology.com/makepayment.html"
-        private const val CINEMA_PRO_3_PACKAGE = "com.infahash.fvision.cpro3"
-    }
+    private companion object { private const val REQ_POST_NOTIFICATIONS = 9001; private const val PAYMENT_URL = "https://osterisktechnology.com/makepayment.html"; private const val CINEMA_PRO_3_PACKAGE = "com.infahash.fvision.cpro3" }
     private lateinit var binding: ActivityDashboardBinding
     private lateinit var prefs: PreferenceManager
     private lateinit var repository: LiveRepository
@@ -68,18 +64,10 @@ class DashboardActivity : BaseActivity() {
 
     private fun setupDashboardCardInteractions() {
         val cards = listOf(binding.cardLiveTv, binding.cardFavorites, binding.cardNotification, binding.cardSupport, binding.cardSettings, binding.cardLiveEvents)
-        val cardColor = ContextCompat.getColor(this, R.color.card)
-        val density = resources.displayMetrics.density
-        val normalElevation = 3f * density
-        val focusedElevation = 7f * density
-        val focusedStroke = (1f * density).toInt()
+        val cardColor = ContextCompat.getColor(this, R.color.card); val density = resources.displayMetrics.density; val normalElevation = 3f * density; val focusedElevation = 7f * density; val focusedStroke = (1f * density).toInt()
         cards.forEach { card ->
             card.isFocusable = true; card.isClickable = true; card.strokeWidth = 0; card.strokeColor = Color.TRANSPARENT; card.cardElevation = normalElevation; enlargeDashboardIcons(card, 42)
-            card.setOnFocusChangeListener { view, hasFocus ->
-                val materialCard = view as MaterialCardView
-                if (hasFocus) { materialCard.setCardBackgroundColor(cardColor); materialCard.strokeWidth = focusedStroke; materialCard.strokeColor = Color.WHITE; materialCard.cardElevation = focusedElevation }
-                else { materialCard.setCardBackgroundColor(cardColor); materialCard.strokeWidth = 0; materialCard.strokeColor = Color.TRANSPARENT; materialCard.cardElevation = normalElevation }
-            }
+            card.setOnFocusChangeListener { view, hasFocus -> val materialCard = view as MaterialCardView; if (hasFocus) { materialCard.setCardBackgroundColor(cardColor); materialCard.strokeWidth = focusedStroke; materialCard.strokeColor = Color.WHITE; materialCard.cardElevation = focusedElevation } else { materialCard.setCardBackgroundColor(cardColor); materialCard.strokeWidth = 0; materialCard.strokeColor = Color.TRANSPARENT; materialCard.cardElevation = normalElevation } }
         }
     }
     private fun enlargeDashboardIcons(card: ViewGroup, sizeDp: Int) { val sizePx = (sizeDp * resources.displayMetrics.density).toInt(); for (index in 0 until card.childCount) when (val child = card.getChildAt(index)) { is ImageView -> { child.layoutParams = child.layoutParams.apply { width = sizePx; height = sizePx }; child.scaleType = ImageView.ScaleType.CENTER_INSIDE; child.requestLayout() }; is ViewGroup -> enlargeDashboardIcons(child, sizeDp) } }
@@ -87,26 +75,20 @@ class DashboardActivity : BaseActivity() {
     private fun setClickListeners() {
         binding.cardLiveTv.setOnClickListener { startActivity(Intent(this, LiveCategoryActivity::class.java)) }
         binding.cardFavorites.setOnClickListener { startActivity(Intent(this, FavoriteChannelsActivity::class.java)) }
-
         val moviesCardContent = binding.cardNotification.getChildAt(0) as? LinearLayout
         (moviesCardContent?.getChildAt(1) as? TextView)?.text = "Movies & VOD"
         (moviesCardContent?.getChildAt(0) as? ImageView)?.setImageResource(android.R.drawable.ic_menu_slideshow)
         binding.cardNotification.setOnClickListener { openCinemaPro3() }
-
         val supportContent = binding.cardSupport.getChildAt(0) as? LinearLayout; (supportContent?.getChildAt(0) as? ImageView)?.setImageResource(R.drawable.ic_live_chat); (supportContent?.getChildAt(1) as? TextView)?.text = "Live Chat"; binding.cardSupport.setOnClickListener { startActivity(Intent(this, ChatHubActivity::class.java)) }
         binding.cardSettings.setOnClickListener { startActivity(Intent(this, SettingsActivity::class.java)) }
+        val epgCardContent = binding.cardLiveEvents.getChildAt(0) as? LinearLayout
+        (epgCardContent?.getChildAt(1) as? TextView)?.text = "Live With EPG"
+        (epgCardContent?.getChildAt(0) as? ImageView)?.setImageResource(android.R.drawable.ic_menu_agenda)
         binding.cardLiveEvents.setOnClickListener { startActivity(Intent(this, LiveCategoryActivity::class.java).apply { putExtra("epg_mode", true) }) }
         binding.btnRenew.setOnClickListener { showRenewPaymentQr() }
     }
 
-    private fun openCinemaPro3() {
-        val launchIntent = packageManager.getLaunchIntentForPackage(CINEMA_PRO_3_PACKAGE)
-        if (launchIntent != null) {
-            launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            try { startActivity(launchIntent) } catch (_: Exception) { Toast.makeText(this, "Unable to open Cinema Pro 3.", Toast.LENGTH_SHORT).show() }
-        } else Toast.makeText(this, "Cinema Pro 3 is not installed on this device.", Toast.LENGTH_LONG).show()
-    }
-
+    private fun openCinemaPro3() { val launchIntent = packageManager.getLaunchIntentForPackage(CINEMA_PRO_3_PACKAGE); if (launchIntent != null) { launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); try { startActivity(launchIntent) } catch (_: Exception) { Toast.makeText(this, "Unable to open Cinema Pro 3.", Toast.LENGTH_SHORT).show() } } else Toast.makeText(this, "Cinema Pro 3 is not installed on this device.", Toast.LENGTH_LONG).show() }
     private fun showRenewPaymentQr() { val qrSize = 720; val matrix: BitMatrix = MultiFormatWriter().encode(PAYMENT_URL, BarcodeFormat.QR_CODE, qrSize, qrSize); val pixels = IntArray(qrSize * qrSize); for (y in 0 until qrSize) { val offset = y * qrSize; for (x in 0 until qrSize) pixels[offset + x] = if (matrix[x, y]) Color.BLACK else Color.WHITE }; val qrBitmap = Bitmap.createBitmap(pixels, 0, qrSize, qrSize, qrSize, Bitmap.Config.ARGB_8888); val container = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL; setPadding(28, 8, 28, 12) }; val instruction = TextView(this).apply { text = "Renew your subscription in just a few steps"; gravity = Gravity.CENTER; textSize = 18f; setTextColor(Color.rgb(30, 30, 30)); setTypeface(typeface, android.graphics.Typeface.BOLD); setPadding(0, 4, 0, 10) }; val steps = TextView(this).apply { text = "1. Open your phone's camera.\n2. Point the camera at the QR code below.\n3. Tap the link that appears on your phone.\n4. Follow the instructions on the payment page to renew your subscription."; gravity = Gravity.CENTER; textSize = 15f; setTextColor(Color.DKGRAY); setLineSpacing(2f, 1.05f); setPadding(8, 0, 8, 10) }; val imageView = ImageView(this).apply { setImageBitmap(qrBitmap); adjustViewBounds = true; setPadding(8, 8, 8, 12); contentDescription = "QR code to open the subscription payment page" }; val scanHint = TextView(this).apply { text = "📱 Scan this code with another phone to open the payment page."; gravity = Gravity.CENTER; textSize = 14f; setTextColor(Color.rgb(55, 55, 55)); setTypeface(typeface, android.graphics.Typeface.BOLD); setPadding(8, 2, 8, 8) }; container.addView(instruction); container.addView(steps); container.addView(imageView, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)); container.addView(scanHint); AlertDialog.Builder(this).setView(container).setNegativeButton("Close", null).setPositiveButton("Open Payment Page") { _, _ -> startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(PAYMENT_URL))) }.show() }
     private fun syncInitialData(forceRefresh: Boolean = false) { if (!hasCredentials() || isInitialSyncRunning) return; val lastSyncTime = prefs.getLastSyncTime(); val currentTime = System.currentTimeMillis(); val twentyFourHoursInMillis = 24L * 60L * 60L * 1000L; val isFirstSync = lastSyncTime <= 0L; if (!forceRefresh && !isFirstSync && currentTime - lastSyncTime < twentyFourHoursInMillis) return; isInitialSyncRunning = true; runCallbackSyncWithLoader(loadingMessage = "Refreshing categories & channels…", successMessage = "Channels Updated Successfully!") { ok, fail -> repository.syncAllData(server = prefs.getServer(), username = prefs.getUsername(), password = prefs.getPassword(), callback = object : SyncCallback { override fun onSuccess() { isInitialSyncRunning = false; prefs.setLastSyncTime(System.currentTimeMillis()); ok() }; override fun onError(message: String) { isInitialSyncRunning = false; fail("Failed to update: $message") } }) } }
     override fun onDestroy() { super.onDestroy(); handler.removeCallbacks(clockRunnable) }
