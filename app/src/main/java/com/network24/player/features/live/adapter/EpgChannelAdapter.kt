@@ -34,7 +34,7 @@ class EpgChannelAdapter(
         }
         holder.binding.imgPlaying.visibility = if (position == selectedPosition) View.VISIBLE else View.GONE
 
-        holder.itemView.setOnFocusChangeListener { view, hasFocus ->
+        holder.itemView.setOnFocusChangeListener { _, hasFocus ->
             if (!hasFocus) return@setOnFocusChangeListener
             val pos = holder.bindingAdapterPosition
             if (pos != RecyclerView.NO_POSITION) onFocused(channel, pos)
@@ -51,8 +51,13 @@ class EpgChannelAdapter(
     }
 
     fun updateData(list: List<LiveChannel>) {
+        // EpgChannelListActivity owns the same MutableList instance that is passed
+        // into this adapter. Copy the incoming list BEFORE clearing the adapter's
+        // list; otherwise updateData(channels) would clear the source list itself
+        // and then add zero items back, leaving the RecyclerView empty.
+        val snapshot = list.toList()
         channels.clear()
-        channels.addAll(list)
+        channels.addAll(snapshot)
         selectedPosition = RecyclerView.NO_POSITION
         notifyDataSetChanged()
     }
@@ -62,8 +67,5 @@ class EpgChannelAdapter(
         selectedPosition = position
         if (old != RecyclerView.NO_POSITION) notifyItemChanged(old)
         if (position != RecyclerView.NO_POSITION) notifyItemChanged(position)
-        if (position in channels.indices) {
-            // Bring the selected channel into view for Fire TV / Android TV DPAD navigation.
-        }
     }
 }
