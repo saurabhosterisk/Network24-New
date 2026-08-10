@@ -222,8 +222,52 @@ class PlayerActivity : BaseActivity() {
 
     private fun toggleUi() { if (binding.bottomOverlay.visibility == View.VISIBLE) { hideHandler.removeCallbacks(hideRunnable); hideRunnable.run() } else showUiWithTimeout() }
 
-    private fun playNextChannel() { PlayerState.next()?.let { c -> retryJob?.cancel(); PlayerManager.play(this, binding.playerView, buildStreamUrl(c)); updateChannelUI(c); toggleSubtitles(isSubtitleEnabled) } }
-    private fun playPreviousChannel() { PlayerState.previous()?.let { c -> retryJob?.cancel(); PlayerManager.play(this, binding.playerView, buildStreamUrl(c)); updateChannelUI(c); toggleSubtitles(isSubtitleEnabled) } }
+    private fun switchToChannel(channel: LiveChannel) {
+        retryJob?.cancel()
+        retryJob = null
+
+        // The old ExoPlayer is released/replaced by PlayerManager when the URL changes.
+        // Remove the listener from the old instance before switching, then attach it to
+        // the new instance so BUFFERING/READY updates the loading indicator correctly.
+        binding.playerView.player?.removeListener(playerListener)
+
+        retryCount = 0
+        recoveryStartedAtMs = 0L
+        errorActive = false
+        hasEverPlayed = false
+
+        binding.progressBar.visibility = View.VISIBLE
+        binding.txtPlayerError.visibility = View.GONE
+        binding.btnReportChannel.visibility = View.GONE
+
+        updateChannelUI(channel)
+        PlayerManager.play(this, binding.playerView, buildStreamUrl(channel))
+
+        binding.playerView.player?.addListener(playerListener)
+
+        // The new player may already have entered BUFFERING before the listener was
+        // attached, so explicitly synchronize the indicator with its current state.
+        if (binding.playerView.player?.playbackState == Player.STATE_READY) {
+            binding.progressBar.visibility = View.GONE
+            hasEverPlayed = true
+        } else {
+            binding.progressBar.visibility = View.VISIBLE
+        }
+
+        toggleSubtitles(isSubtitleEnabled)
+    }
+
+    private fun playNextChannel() {
+        PlayerState.next()?.let { channel ->
+            switchToChannel(channel)
+        }
+    }
+
+    private fun playPreviousChannel() {
+        PlayerState.previous()?.let { channel ->
+            switchToChannel(channel)
+        }
+    }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         if (binding.bottomOverlay.visibility != View.VISIBLE) {
