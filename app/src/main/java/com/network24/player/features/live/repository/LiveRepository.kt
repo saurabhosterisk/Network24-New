@@ -19,7 +19,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-
 class LiveRepository(private val context: Context) {
 
     private val db = DatabaseProvider.get(context)
@@ -39,8 +38,6 @@ class LiveRepository(private val context: Context) {
                 val r2 = sync.syncLiveChannelsAll(force = true)
                 if (r2 is SyncResult.Error) throw Exception(r2.message)
 
-                // A full sync changes category-specific channel lists too.
-                // Clear the whole in-memory cache so no stale category data survives.
                 MemoryCache.clearAll()
 
                 withContext(Dispatchers.Main) { callback.onSuccess() }
@@ -56,7 +53,9 @@ class LiveRepository(private val context: Context) {
         password: String,
         forceRefresh: Boolean = false
     ): List<LiveCategory> {
-        MemoryCache.get<List<LiveCategory>>(MemKeys.LIVE_CATEGORIES)?.let { return it }
+        if (!forceRefresh) {
+            MemoryCache.get<List<LiveCategory>>(MemKeys.LIVE_CATEGORIES)?.let { return it }
+        }
 
         val roomList = db.categoryDao().getByType(CategoryType.LIVE).map { it.toLiveCategory() }
         if (roomList.isNotEmpty() && !forceRefresh) {
@@ -85,7 +84,12 @@ class LiveRepository(private val context: Context) {
         val safeCategoryId = if (categoryId.isBlank()) "all" else categoryId
         val memKey = MemKeys.liveChannels(safeCategoryId)
 
-        MemoryCache.get<List<LiveChannel>>(memKey)?.let { return it }
+        // A forced refresh must bypass both memory and Room cache. Previously the
+        // memory cache was checked even when forceRefresh=true, which meant an
+        // empty/stale category result could never be repaired by the refresh path.
+        if (!forceRefresh) {
+            MemoryCache.get<List<LiveChannel>>(memKey)?.let { return it }
+        }
 
         val roomList = if (safeCategoryId == "all") {
             db.channelDao().getAll().map { it.toLiveChannel() }
@@ -140,32 +144,21 @@ class LiveRepository(private val context: Context) {
         return fresh
     }
 
-    /**
-     * Gets "Now Playing" and "Next Playing" EPG data for a specific channel using the bulk XMLTV data.
-     * Hits the memory cache first to prevent UI stuttering in RecyclerViews.
-     */
     suspend fun getNowNextEpg(epgChannelId: String): Pair<com.network24.player.core.database.entity.EpgEntity?, com.network24.player.core.database.entity.EpgEntity?> {
-        // If there's no mapping ID, return empty
         if (epgChannelId.isBlank()) return Pair(null, null)
 
         val memKey = "epg_now_next_$epgChannelId"
 
-        // 1. Try Memory Cache (Fastest)
         MemoryCache.get<Pair<com.network24.player.core.database.entity.EpgEntity?, com.network24.player.core.database.entity.EpgEntity?>>(memKey)?.let {
             return it
         }
 
-        // 2. Fetch from Room
         val now = System.currentTimeMillis()
         val nowEntity = db.epgDao().getNowByEpgChannelId(epgChannelId, now)
         val nextEntity = db.epgDao().getNextByEpgChannelId(epgChannelId, now)
-
-        // 3. Create the Pair directly from Entities
         val result = Pair(nowEntity, nextEntity)
 
-        // 4. Save to Memory Cache (Using existing CacheTtl.EPG_MS)
         MemoryCache.put(memKey, result, CacheTtl.EPG_MS)
-
         return result
     }
 
