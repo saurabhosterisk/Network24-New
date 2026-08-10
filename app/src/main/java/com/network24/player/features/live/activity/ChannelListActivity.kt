@@ -362,9 +362,31 @@ class ChannelListActivity : BaseActivity() {
         super.onResume()
 
         // Re-attach the shared ExoPlayer after returning from the full-screen player.
-        // Do not create a new stream unless the shared player is actually idle/ended.
+        // Full-screen channel changes update PlayerState.currentPosition, so resolve
+        // the selected row by stream_id instead of assuming both lists still have the
+        // same position. This keeps the selector and playing icon synchronized.
         if (isGoingToFullscreen) {
             isGoingToFullscreen = false
+
+            val playingChannel = PlayerState.currentChannel()
+            if (playingChannel != null) {
+                val streamId = playingChannel.stream_id?.toString()
+                val listPosition = if (streamId != null) {
+                    channelList.indexOfFirst { it.stream_id?.toString() == streamId }
+                } else {
+                    -1
+                }
+
+                if (listPosition >= 0) {
+                    previewPosition = listPosition
+                    adapter.setPlaying(listPosition)
+                    binding.rvChannels.post {
+                        binding.rvChannels.findViewHolderForAdapterPosition(listPosition)
+                            ?.itemView
+                            ?.requestFocus()
+                    }
+                }
+            }
         }
 
         if (previewPosition >= 0 && channelList.isNotEmpty()) {
