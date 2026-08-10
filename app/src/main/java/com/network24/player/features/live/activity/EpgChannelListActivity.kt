@@ -137,7 +137,7 @@ class EpgChannelListActivity : BaseActivity() {
     private fun addProgram(label: String, title: String, start: Long?, stop: Long?, highlight: Boolean) {
         val card = TextView(this).apply {
             text = "$label\n$title\n${formatTime(start)} - ${formatTime(stop)}"
-            textColor = Color.WHITE
+            setTextColor(Color.WHITE)
             textSize = if (highlight) 16f else 14f
             setPadding(14, 12, 14, 12)
             setBackgroundResource(R.drawable.bg_epg_item)
