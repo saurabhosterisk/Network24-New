@@ -1,5 +1,7 @@
 package com.network24.player.features.player.manager
 
+import android.app.Activity
+import android.app.Application
 import android.content.Context
 import androidx.annotation.OptIn
 import androidx.media3.common.MediaItem
@@ -17,6 +19,8 @@ object PlayerManager {
     private var exoPlayer: ExoPlayer? = null
     private var currentUrl: String? = null
     private var currentPlayerView: PlayerView? = null
+    private var ownerActivity: Activity? = null
+    private var lifecycleCallbacksRegistered = false
 
     private var rebufferCount = 0
     private var bufferingStartedAtMs = 0L
@@ -24,16 +28,39 @@ object PlayerManager {
     private var lastError: PlaybackException? = null
     private var lastPlaybackState = Player.STATE_IDLE
 
-    // Tuned for live HLS/Xtream playback: enough headroom for short network
-    // fluctuations without creating excessive startup delay or data usage.
     private val loadControl = DefaultLoadControl.Builder()
         .setBufferDurationsMs(
-            20_000, // minBufferMs
-            60_000, // maxBufferMs
-            3_000,  // bufferForPlaybackMs
-            6_000   // bufferForPlaybackAfterRebufferMs
+            20_000,
+            60_000,
+            3_000,
+            6_000
         )
         .build()
+
+    private fun ensureActivityLifecycleCallbacks(context: Context) {
+        if (lifecycleCallbacksRegistered) return
+        val application = context.applicationContext as? Application ?: return
+
+        application.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
+            override fun onActivityCreated(activity: Activity, savedInstanceState: android.os.Bundle?) = Unit
+            override fun onActivityStarted(activity: Activity) = Unit
+            override fun onActivityResumed(activity: Activity) = Unit
+            override fun onActivityPaused(activity: Activity) = Unit
+            override fun onActivitySaveInstanceState(activity: Activity, outState: android.os.Bundle) = Unit
+            override fun onActivityDestroyed(activity: Activity) = Unit
+
+            override fun onActivityStopped(activity: Activity) {
+                // The player belongs to the activity that currently hosts its PlayerView.
+                // When that activity is no longer visible, terminate the stream so the
+                // Xtream/HLS connection is not left running in the background.
+                if (ownerActivity === activity) {
+                    release()
+                    ownerActivity = null
+                }
+            }
+        })
+        lifecycleCallbacksRegistered = true
+    }
 
     fun getPlayer(context: Context): ExoPlayer {
         if (exoPlayer == null) {
@@ -46,7 +73,6 @@ object PlayerManager {
                 .build()
                 .apply {
                     playWhenReady = true
-
                     trackSelectionParameters = trackSelectionParameters
                         .buildUpon()
                         .setSelectUndeterminedTextLanguage(true)
@@ -55,7 +81,6 @@ object PlayerManager {
                     addListener(object : Player.Listener {
                         override fun onPlaybackStateChanged(playbackState: Int) {
                             val wasBuffering = lastPlaybackState == Player.STATE_BUFFERING
-
                             if (playbackState == Player.STATE_BUFFERING && !wasBuffering) {
                                 rebufferCount++
                                 bufferingStartedAtMs = System.currentTimeMillis()
@@ -65,7 +90,6 @@ object PlayerManager {
                                     bufferingStartedAtMs = 0L
                                 }
                             }
-
                             lastPlaybackState = playbackState
                         }
 
@@ -75,13 +99,15 @@ object PlayerManager {
                         }
                     })
                 }
-
             exoPlayer = player
         }
         return exoPlayer!!
     }
 
     fun attach(context: Context, playerView: PlayerView) {
+        ensureActivityLifecycleCallbacks(context)
+        if (context is Activity) ownerActivity = context
+
         val player = getPlayer(context)
         if (currentPlayerView === playerView) return
         currentPlayerView?.player = null
@@ -97,10 +123,6 @@ object PlayerManager {
     }
 
     fun play(context: Context, playerView: PlayerView, streamUrl: String) {
-        // A channel switch must terminate the previous ExoPlayer instance.
-        // stop()/clearMediaItems() normally stops playback, but explicitly
-        // releasing the old player guarantees that its HLS/DataSource requests
-        // are closed before the new channel creates another connection.
         if (currentUrl != null && currentUrl != streamUrl) {
             releaseCurrentStreamForSwitch()
         }
@@ -128,7 +150,6 @@ object PlayerManager {
     private fun releaseCurrentStreamForSwitch() {
         currentPlayerView?.player = null
         currentPlayerView = null
-
         exoPlayer?.stop()
         exoPlayer?.clearMediaItems()
         exoPlayer?.release()
@@ -154,6 +175,10 @@ object PlayerManager {
     }
 
     fun release() {
+        currentPlayerView?.player = null
+        currentPlayerView = null
+        exoPlayer?.stop()
+        exoPlayer?.clearMediaItems()
         exoPlayer?.release()
         exoPlayer = null
         currentUrl = null
