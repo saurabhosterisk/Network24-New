@@ -281,12 +281,12 @@
                     <ImageView
                         android:layout_width="20dp"
                         android:layout_height="20dp"
-                        android:src="@android:drawable/ic_menu_manage"/>
+                        android:src="@android:drawable/ic_menu_agenda"/>
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="10dp"
-                        android:text="Settings"
+                        android:text="Live With EPG"
                         android:textColor="@android:color/white"
                         android:textStyle="bold"
                         android:textSize="13sp"/>
@@ -314,12 +314,12 @@
                     <ImageView
                         android:layout_width="20dp"
                         android:layout_height="20dp"
-                        android:src="@android:drawable/ic_menu_agenda"/>
+                        android:src="@android:drawable/ic_menu_manage"/>
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="10dp"
-                        android:text="Live With EPG"
+                        android:text="Settings"
                         android:textColor="@android:color/white"
                         android:textStyle="bold"
                         android:textSize="13sp"/>
