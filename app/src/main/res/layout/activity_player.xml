@@ -126,7 +126,7 @@
                 android:layout_weight="1"
                 android:ellipsize="end"
                 android:maxLines="1"
-                android:text="Ready for a safer shower? Enjoy a one-day bath remodel with Jacuzzi."
+                android:text="No Program Info"
                 android:textColor="#DDDDDD"
                 android:textSize="13sp" />
 
@@ -184,7 +184,7 @@
                 android:layout_weight="1"
                 android:ellipsize="end"
                 android:maxLines="1"
-                android:text="1776 - 2026 250th Anniversary Quarter Celebration Program"
+                android:text=""
                 android:textColor="#DDDDDD"
                 android:textSize="13sp" />
 
