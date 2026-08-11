@@ -41,7 +41,9 @@ class EpgChannelListActivity : BaseActivity() {
     private var selectedChannel: LiveChannel? = null
     private var selectedDay = 0
     private val channelWidthDp = 220
-    private val minuteWidthDp = 3.0f
+    // 4.5dp per minute gives 270dp per hour, making at least ~15 characters
+    // comfortably visible in most programme cards while keeping the guide usable.
+    private val minuteWidthDp = 4.5f
     private val nowHandler = Handler(Looper.getMainLooper())
     private val nowLineRunnable = object : Runnable {
         override fun run() {
@@ -179,7 +181,7 @@ class EpgChannelListActivity : BaseActivity() {
                 setTypeface(typeface, android.graphics.Typeface.BOLD)
                 setPadding(dp(4), 0, dp(4), 0)
             }
-            timeline.addView(label, LinearLayout.LayoutParams(dp(90), dp(38)))
+            timeline.addView(label, LinearLayout.LayoutParams(dp(135), dp(38)))
             time.add(Calendar.MINUTE, 30)
         }
         timelineFrame.addView(timeline, FrameLayout.LayoutParams(-2, dp(38)))
