@@ -3,8 +3,11 @@ package com.network24.player.features.live.activity
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.Gravity
 import android.view.View
+import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -40,6 +43,13 @@ class EpgChannelListActivity : BaseActivity() {
     private var selectedDay = 0
     private val channelWidthDp = 220
     private val minuteWidthDp = 3.0f
+    private val nowHandler = Handler(Looper.getMainLooper())
+    private val nowLineRunnable = object : Runnable {
+        override fun run() {
+            if (!isFinishing && selectedDay == 0 && channels.isNotEmpty()) renderGrid()
+            nowHandler.postDelayed(this, 60_000L)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -73,6 +83,7 @@ class EpgChannelListActivity : BaseActivity() {
                 }
                 buildDateSelector()
                 loadGuideData()
+                nowHandler.postDelayed(nowLineRunnable, 60_000L)
             } catch (e: Exception) {
                 binding.txtEpgStatus.text = e.message ?: "Unable to load channels"
             }
@@ -139,7 +150,9 @@ class EpgChannelListActivity : BaseActivity() {
         binding.gridContainer.removeAllViews()
         val dayStart = startOfDay(selectedDay)
         val dayEnd = dayStart + 24L * 60L * 60L * 1000L
-        val timelineStart = if (selectedDay == 0) System.currentTimeMillis() else dayStart
+        // Keep a small amount of the current half-hour visible so the NOW line
+        // can sit inside the currently playing program, like a real TV guide.
+        val timelineStart = if (selectedDay == 0) floorToHalfHour(System.currentTimeMillis()) else dayStart
         addTimelineHeader(timelineStart, dayStart, dayEnd)
         channels.forEachIndexed { index, channel -> addChannelRow(channel, index, timelineStart, dayEnd) }
         binding.txtEpgStatus.text = "${channels.size} channels • 3-day guide"
@@ -149,9 +162,13 @@ class EpgChannelListActivity : BaseActivity() {
     private fun addTimelineHeader(timelineStart: Long, dayStart: Long, dayEnd: Long) {
         val row = horizontalRow()
         row.addView(channelHeader("CHANNELS"))
-        val timeline = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        val timelineFrame = FrameLayout(this)
+        val timeline = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
         val time = Calendar.getInstance().apply {
-            timeInMillis = if (selectedDay == 0) roundUpToNextHalfHour(timelineStart) else dayStart
+            timeInMillis = if (selectedDay == 0) timelineStart else dayStart
         }
         val totalMinutes = ((dayEnd - timelineStart) / 60_000L).coerceAtLeast(30L)
         val slots = (totalMinutes / 30L + 2L).toInt().coerceAtMost(50)
@@ -168,7 +185,9 @@ class EpgChannelListActivity : BaseActivity() {
             timeline.addView(label, LinearLayout.LayoutParams(dp(90), dp(38)))
             time.add(Calendar.MINUTE, 30)
         }
-        row.addView(timeline)
+        timelineFrame.addView(timeline, FrameLayout.LayoutParams(-2, dp(38)))
+        if (selectedDay == 0) addNowLine(timelineFrame, timelineStart, 38)
+        row.addView(timelineFrame)
         binding.gridContainer.addView(row)
     }
 
@@ -210,7 +229,11 @@ class EpgChannelListActivity : BaseActivity() {
         channelPanel.addView(name, LinearLayout.LayoutParams(0, -1, 1f))
         row.addView(channelPanel, LinearLayout.LayoutParams(dp(channelWidthDp), dp(64)))
 
-        val timeline = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        val timelineFrame = FrameLayout(this)
+        val timeline = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
         val programs = epgByChannel[channel.epg_channel_id.orEmpty()].orEmpty()
             .filter { (it.stopTimestamp ?: 0L) > timelineStart && (it.startTimestamp ?: Long.MAX_VALUE) < dayEnd }
             .sortedBy { it.startTimestamp ?: Long.MAX_VALUE }
@@ -228,7 +251,9 @@ class EpgChannelListActivity : BaseActivity() {
             }
         }
         if (cursor < dayEnd) addEmptyBlock(timeline, dayEnd - cursor)
-        row.addView(timeline)
+        timelineFrame.addView(timeline, FrameLayout.LayoutParams(-2, dp(64)))
+        if (selectedDay == 0) addNowLine(timelineFrame, timelineStart, 64)
+        row.addView(timelineFrame)
         binding.gridContainer.addView(row)
     }
 
@@ -239,25 +264,54 @@ class EpgChannelListActivity : BaseActivity() {
 
     private fun addProgramBlock(parent: LinearLayout, channel: LiveChannel, program: EpgEntity, durationMs: Long) {
         val now = System.currentTimeMillis()
-        val isNow = (program.startTimestamp ?: Long.MAX_VALUE) <= now && (program.stopTimestamp ?: Long.MIN_VALUE) > now
+        val start = program.startTimestamp ?: Long.MAX_VALUE
+        val stop = program.stopTimestamp ?: Long.MIN_VALUE
+        val isNow = start <= now && stop > now
         val title = program.title?.takeIf { it.isNotBlank() } ?: "No Program Info"
-        val card = TextView(this).apply {
-            text = if (isNow) "NOW\n$title" else title
-            gravity = Gravity.CENTER_VERTICAL
-            setTextColor(Color.WHITE)
-            textSize = if (isNow) 15f else 14f
-            setPadding(dp(10), dp(4), dp(10), dp(4))
-            background = programBackground(channel, program, isNow, false)
+        val minutes = (durationMs / 60_000L).coerceAtLeast(5L)
+        val cardWidth = (minutes * minuteWidthDp).toInt().coerceAtLeast(dp(55))
+
+        val card = FrameLayout(this).apply {
             isFocusable = true
             isClickable = true
+            background = programBackground(channel, program, isNow, false)
             setOnFocusChangeListener { v, hasFocus ->
                 v.background = programBackground(channel, program, isNow, hasFocus)
                 if (hasFocus) updateTopInfo(channel, program)
             }
             setOnClickListener { playChannel(channel, program) }
         }
-        val minutes = (durationMs / 60_000L).coerceAtLeast(5L)
-        parent.addView(card, LinearLayout.LayoutParams((minutes * minuteWidthDp).toInt().coerceAtLeast(dp(55)), dp(64)).apply { marginEnd = dp(2) })
+        val text = TextView(this).apply {
+            this.text = if (isNow) "NOW\n$title" else title
+            gravity = Gravity.CENTER_VERTICAL
+            setTextColor(Color.WHITE)
+            textSize = if (isNow) 15f else 14f
+            setPadding(dp(10), dp(4), dp(10), dp(7))
+            maxLines = 2
+            ellipsize = android.text.TextUtils.TruncateAt.END
+        }
+        card.addView(text, FrameLayout.LayoutParams(-1, -1))
+
+        // Progress indicator for the currently running programme. The filled
+        // line represents how much of the programme has already elapsed.
+        if (isNow && stop > start) {
+            val progress = ((now - start).toFloat() / (stop - start).toFloat()).coerceIn(0f, 1f)
+            val progressWidth = (cardWidth * progress).toInt().coerceAtLeast(dp(3))
+            val progressLine = View(this).apply { setBackgroundColor(Color.WHITE) }
+            card.addView(progressLine, FrameLayout.LayoutParams(progressWidth, dp(3), Gravity.BOTTOM or Gravity.START))
+        }
+
+        parent.addView(card, LinearLayout.LayoutParams(cardWidth, dp(64)).apply { marginEnd = dp(2) })
+    }
+
+    private fun addNowLine(parent: FrameLayout, timelineStart: Long, heightDp: Int) {
+        val now = System.currentTimeMillis()
+        val minutes = ((now - timelineStart).coerceAtLeast(0L) / 60_000L).toFloat()
+        val left = (minutes * minuteWidthDp).toInt()
+        val line = View(this).apply { setBackgroundColor(Color.rgb(255, 152, 0)) }
+        val params = FrameLayout.LayoutParams(dp(2), dp(heightDp), Gravity.TOP or Gravity.START)
+        params.leftMargin = left
+        parent.addView(line, params)
     }
 
     private fun channelHeader(text: String): TextView = TextView(this).apply {
@@ -269,7 +323,10 @@ class EpgChannelListActivity : BaseActivity() {
         background = roundedBackground(false, false)
     }.also { it.layoutParams = LinearLayout.LayoutParams(dp(channelWidthDp), dp(38)) }
 
-    private fun horizontalRow() = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+    private fun horizontalRow() = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+    }
 
     private fun playChannel(channel: LiveChannel, program: EpgEntity? = null) {
         val streamId = channel.stream_id ?: return
@@ -301,7 +358,14 @@ class EpgChannelListActivity : BaseActivity() {
 
     private fun programBackground(channel: LiveChannel, program: EpgEntity, isNow: Boolean, focused: Boolean): GradientDrawable {
         val selected = selectedChannel?.stream_id != null && selectedChannel?.stream_id == channel.stream_id
-        return roundedBackground(focused || isNow || selected, isNow || selected)
+        if (isNow) {
+            return GradientDrawable().apply {
+                cornerRadius = dp(4).toFloat()
+                setColor(Color.rgb(255, 136, 0))
+                setStroke(dp(if (focused || selected) 3 else 2), if (focused || selected) Color.WHITE else Color.rgb(255, 193, 7))
+            }
+        }
+        return roundedBackground(focused || selected, selected)
     }
 
     private fun roundedBackground(active: Boolean, strong: Boolean): GradientDrawable {
@@ -322,14 +386,18 @@ class EpgChannelListActivity : BaseActivity() {
         add(Calendar.DAY_OF_YEAR, offset)
     }.timeInMillis
 
-    private fun roundUpToNextHalfHour(timestamp: Long): Long {
+    private fun floorToHalfHour(timestamp: Long): Long {
         val cal = Calendar.getInstance().apply { timeInMillis = timestamp }
         cal.set(Calendar.SECOND, 0)
         cal.set(Calendar.MILLISECOND, 0)
-        val minute = cal.get(Calendar.MINUTE)
-        cal.set(Calendar.MINUTE, if (minute % 30 == 0) minute else minute + (30 - minute % 30))
+        cal.set(Calendar.MINUTE, if (cal.get(Calendar.MINUTE) < 30) 0 else 30)
         return cal.timeInMillis
     }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
+
+    override fun onDestroy() {
+        nowHandler.removeCallbacks(nowLineRunnable)
+        super.onDestroy()
+    }
 }
