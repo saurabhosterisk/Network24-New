@@ -1,6 +1,8 @@
 package com.network24.player.features.live.activity
 
+import android.content.Context
 import android.content.Intent
+import android.util.AttributeSet
 import android.view.View
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
@@ -19,7 +21,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /** Binds the existing Live right-side drawer menu to the Live With EPG screen. */
-class EpgDrawerMenuBinder(context: android.content.Context) : View(context) {
+class EpgDrawerMenuBinder @JvmOverloads constructor(
+    context: Context,
+    attrs: AttributeSet? = null,
+    defStyleAttr: Int = 0
+) : View(context, attrs, defStyleAttr) {
+
     private var bound = false
     private var backCallback: OnBackPressedCallback? = null
 
