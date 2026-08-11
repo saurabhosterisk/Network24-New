@@ -13,8 +13,6 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
-import android.widget.ScrollView
-import android.widget.HorizontalScrollView
 import androidx.lifecycle.lifecycleScope
 import coil.load
 import com.network24.player.R
@@ -306,7 +304,7 @@ class EpgChannelListActivity : BaseActivity() {
         panel.id = View.generateViewId()
         panel.tag = channel.stream_id
         channelFocusViews.add(panel)
-        binding.channelContainer.addView(panel, LinearLayout.LayoutParams(dp(channelWidthDp - 5), dp(rowHeightDp - 10)).apply {
+        binding.channelContainer.addView(panel, LinearLayout.LayoutParams(dp(channelWidthDp - 5), dp(rowHeightDp - 6)).apply {
             topMargin = dp(3)
             bottomMargin = dp(3)
             marginEnd = dp(5)
@@ -400,7 +398,7 @@ class EpgChannelListActivity : BaseActivity() {
             ellipsize = android.text.TextUtils.TruncateAt.END
             background = roundedBackground(false, false)
         }
-        parent.addView(card, LinearLayout.LayoutParams(cardWidth, dp(rowHeightDp - 10)).apply {
+        parent.addView(card, LinearLayout.LayoutParams(cardWidth, dp(rowHeightDp - 6)).apply {
             marginEnd = cardGap
             topMargin = dp(3)
             bottomMargin = dp(3)
@@ -409,7 +407,7 @@ class EpgChannelListActivity : BaseActivity() {
 
     private fun addEmptyBlock(parent: LinearLayout, durationMs: Long) {
         val minutes = (durationMs / 60_000L).coerceAtLeast(5L)
-        parent.addView(View(this), LinearLayout.LayoutParams((minutes * minuteWidthDp).toInt().coerceAtLeast(dp(18)), dp(rowHeightDp - 10)).apply {
+        parent.addView(View(this), LinearLayout.LayoutParams((minutes * minuteWidthDp).toInt().coerceAtLeast(dp(18)), dp(rowHeightDp - 6)).apply {
             topMargin = dp(3)
             bottomMargin = dp(3)
         })
@@ -458,7 +456,7 @@ class EpgChannelListActivity : BaseActivity() {
             }
             card.addView(progressLine, FrameLayout.LayoutParams(progressWidth, dp(3), Gravity.BOTTOM or Gravity.START))
         }
-        parent.addView(card, LinearLayout.LayoutParams(cardWidth, dp(rowHeightDp - 10)).apply {
+        parent.addView(card, LinearLayout.LayoutParams(cardWidth, dp(rowHeightDp - 6)).apply {
             marginEnd = cardGap
             topMargin = dp(3)
             bottomMargin = dp(3)
@@ -515,15 +513,17 @@ class EpgChannelListActivity : BaseActivity() {
                 }
             }
         }
-        for (rowIndex in programFocusRows.indices) programFocusRows[rowIndex].forEach { programView ->
-            val parts = programView.tag?.toString()?.split("|") ?: emptyList()
-            val start = parts.getOrNull(1)?.toLongOrNull() ?: 0L
-            val stop = parts.getOrNull(2)?.toLongOrNull() ?: start
-            val center = (start + stop) / 2L
-            val up = nearestProgramInRow(rowIndex - 1, center)
-            val down = nearestProgramInRow(rowIndex + 1, center)
-            programView.nextFocusUpId = up?.id ?: channelFocusViews.getOrNull(rowIndex)?.id ?: programView.id
-            programView.nextFocusDownId = down?.id ?: channelFocusViews.getOrNull(rowIndex)?.id ?: programView.id
+        for (rowIndex in programFocusRows.indices) {
+            programFocusRows[rowIndex].forEach { programView ->
+                val parts = programView.tag?.toString()?.split("|") ?: emptyList()
+                val start = parts.getOrNull(1)?.toLongOrNull() ?: 0L
+                val stop = parts.getOrNull(2)?.toLongOrNull() ?: start
+                val center = (start + stop) / 2L
+                val up = nearestProgramInRow(rowIndex - 1, center)
+                val down = nearestProgramInRow(rowIndex + 1, center)
+                programView.nextFocusUpId = up?.id ?: channelFocusViews.getOrNull(rowIndex)?.id ?: programView.id
+                programView.nextFocusDownId = down?.id ?: channelFocusViews.getOrNull(rowIndex)?.id ?: programView.id
+            }
         }
     }
 
@@ -544,7 +544,9 @@ class EpgChannelListActivity : BaseActivity() {
         binding.channelVerticalScroll.post {
             val channelView = channelFocusViews.getOrNull(channelIndex)
             val programKey = pendingFocusProgramKey
-            val target = if (!programKey.isNullOrBlank()) programFocusRows.getOrNull(channelIndex)?.firstOrNull { it.tag?.toString() == programKey } else null
+            val target = if (!programKey.isNullOrBlank()) {
+                programFocusRows.getOrNull(channelIndex)?.firstOrNull { it.tag?.toString() == programKey }
+            } else null
             val focusTarget = target ?: channelView
             if (focusTarget != null) {
                 val scrollY = binding.epgVerticalScroll.scrollY
