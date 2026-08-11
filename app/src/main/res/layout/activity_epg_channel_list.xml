@@ -128,47 +128,80 @@
         </androidx.constraintlayout.widget.ConstraintLayout>
     </com.google.android.material.card.MaterialCardView>
 
-    <HorizontalScrollView
-        android:id="@+id/dateScroll"
-        android:layout_width="0dp"
-        android:layout_height="48dp"
-        android:layout_marginStart="10dp"
-        android:layout_marginEnd="10dp"
-        android:fillViewport="true"
-        android:scrollbars="none"
-        app:layout_constraintTop_toBottomOf="@id/topCard"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
-        <LinearLayout
-            android:id="@+id/dateSelector"
-            android:layout_width="wrap_content"
-            android:layout_height="match_parent"
-            android:orientation="horizontal"
-            android:gravity="center_vertical" />
-    </HorizontalScrollView>
-
-    <ScrollView
-        android:id="@+id/gridVerticalScroll"
+    <FrameLayout
+        android:id="@+id/epgArea"
         android:layout_width="0dp"
         android:layout_height="0dp"
         android:layout_marginStart="10dp"
         android:layout_marginEnd="10dp"
         android:layout_marginBottom="10dp"
-        android:fillViewport="true"
-        app:layout_constraintTop_toBottomOf="@id/dateScroll"
+        app:layout_constraintTop_toBottomOf="@id/topCard"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
+
+        <TextView
+            android:id="@+id/stickyDate"
+            android:layout_width="220dp"
+            android:layout_height="38dp"
+            android:gravity="center"
+            android:text="CHANNELS"
+            android:textColor="#BFC3FF"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:background="@color/card"
+            android:elevation="8dp" />
+
         <HorizontalScrollView
-            android:id="@+id/gridHorizontalScroll"
+            android:id="@+id/epgHeaderScroll"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:scrollbars="horizontal">
+            android:layout_height="38dp"
+            android:layout_marginStart="220dp"
+            android:scrollbars="none"
+            android:fillViewport="false"
+            android:elevation="7dp">
             <LinearLayout
-                android:id="@+id/gridContainer"
+                android:id="@+id/epgHeaderContainer"
                 android:layout_width="wrap_content"
+                android:layout_height="38dp"
+                android:orientation="horizontal" />
+        </HorizontalScrollView>
+
+        <ScrollView
+            android:id="@+id/channelVerticalScroll"
+            android:layout_width="220dp"
+            android:layout_height="match_parent"
+            android:layout_marginTop="38dp"
+            android:scrollbars="none"
+            android:fillViewport="false"
+            android:elevation="6dp">
+            <LinearLayout
+                android:id="@+id/channelContainer"
+                android:layout_width="220dp"
                 android:layout_height="wrap_content"
                 android:orientation="vertical" />
+        </ScrollView>
+
+        <HorizontalScrollView
+            android:id="@+id/epgHorizontalScroll"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_marginStart="220dp"
+            android:layout_marginTop="38dp"
+            android:scrollbars="horizontal"
+            android:fillViewport="false">
+            <ScrollView
+                android:id="@+id/epgVerticalScroll"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:scrollbars="vertical"
+                android:fillViewport="false">
+                <LinearLayout
+                    android:id="@+id/epgRowsContainer"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+            </ScrollView>
         </HorizontalScrollView>
-    </ScrollView>
+    </FrameLayout>
 </androidx.constraintlayout.widget.ConstraintLayout>
