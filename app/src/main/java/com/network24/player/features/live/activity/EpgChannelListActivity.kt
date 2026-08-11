@@ -145,12 +145,12 @@ class EpgChannelListActivity : BaseActivity() {
     }
 
     private fun loadGuideData() {
-        binding.txtEpgStatus.text = "Loading 3-day guide…"
+        binding.txtEpgStatus.text = "Loading 2-day guide…"
         lifecycleScope.launch(Dispatchers.IO) {
             try {
                 val ids = channels.mapNotNull { it.epg_channel_id?.takeIf(String::isNotBlank) }.distinct()
                 val now = System.currentTimeMillis()
-                val end = startOfDay(3)
+                val end = startOfDay(2)
                 val db = DatabaseProvider.get(this@EpgChannelListActivity)
                 var listings = if (ids.isEmpty()) {
                     emptyList()
@@ -180,8 +180,8 @@ class EpgChannelListActivity : BaseActivity() {
         val savedY = if (preserveScroll) binding.epgVerticalScroll.scrollY else 0
 
         timelineStart = floorToHalfHour(System.currentTimeMillis())
-        timelineEnd = startOfDay(3)
-        if (timelineEnd <= timelineStart) timelineEnd = timelineStart + 3L * 24L * 60L * 60L * 1000L
+        timelineEnd = startOfDay(2)
+        if (timelineEnd <= timelineStart) timelineEnd = timelineStart + 2L * 24L * 60L * 60L * 1000L
 
         binding.epgHeaderContainer.removeAllViews()
         binding.channelContainer.removeAllViews()
@@ -193,7 +193,7 @@ class EpgChannelListActivity : BaseActivity() {
             addEpgRow(channel, index)
         }
 
-        binding.txtEpgStatus.text = "${channels.size} channels • 3-day guide"
+        binding.txtEpgStatus.text = "${channels.size} channels • 2-day guide"
         if (selectedChannel == null && channels.isNotEmpty()) updateTopInfo(channels.first())
         updateStickyDate(savedX)
 
