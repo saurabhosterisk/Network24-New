@@ -9,9 +9,6 @@ import com.network24.player.core.database.entity.EpgEntity
 
 @Dao
 interface EpgDao {
-    // -------------------------
-    // OLD (kept as-is)
-    // -------------------------
     @Query("SELECT * FROM epg WHERE streamId = :streamId ORDER BY startTimestamp ASC")
     suspend fun getByStream(streamId: Int): List<EpgEntity>
 
@@ -27,10 +24,6 @@ interface EpgDao {
         insertAll(items)
     }
 
-    // -------------------------
-    // NEW (for full EPG via epgChannelId)
-    // Works even if streamId is unknown, as long as epgChannelId matches.
-    // -------------------------
     @Query("""
         SELECT * FROM epg
         WHERE epgChannelId = :epgChannelId
@@ -61,14 +54,32 @@ interface EpgDao {
     """)
     suspend fun getNextByEpgChannelId(epgChannelId: String, nowTs: Long): EpgEntity?
 
-    // REMOVED the extra @Insert annotation and fixed table name to "epg"
+    /**
+     * Loads the guide for all channels in one Room query. This is important for
+     * the grid-style Live With EPG screen so we don't perform one DB query per
+     * channel row.
+     */
+    @Query("""
+        SELECT * FROM epg
+        WHERE epgChannelId IN (:epgChannelIds)
+          AND startTimestamp IS NOT NULL
+          AND stopTimestamp IS NOT NULL
+          AND stopTimestamp > :fromTs
+          AND startTimestamp < :toTs
+        ORDER BY epgChannelId ASC, startTimestamp ASC
+    """)
+    suspend fun getByEpgChannelIds(
+        epgChannelIds: List<String>,
+        fromTs: Long,
+        toTs: Long
+    ): List<EpgEntity>
+
     @Query("DELETE FROM epg")
     suspend fun deleteAll()
 
-    // Transaction ensures the DB isn't left empty if the insert fails midway
     @Transaction
     suspend fun replaceAllEpgs(epgs: List<EpgEntity>) {
         deleteAll()
-        insertAll(epgs) // Reuses the insertAll method from the OLD section
+        insertAll(epgs)
     }
 }
