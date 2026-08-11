@@ -71,7 +71,7 @@
                 android:gravity="center"
                 android:paddingStart="12dp"
                 android:paddingEnd="12dp"
-                android:text="TV GUIDE"
+                android:text=""
                 android:textColor="#D8D2FF"
                 android:textSize="11sp"
                 android:textStyle="bold"
