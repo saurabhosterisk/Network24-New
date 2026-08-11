@@ -56,6 +56,7 @@ class EpgChannelListActivity : BaseActivity() {
     private val programFocusRows = mutableListOf<MutableList<View>>()
     private var pendingFocusChannelId: Int? = null
     private var pendingFocusProgramKey: String? = null
+    private var expectingFullscreenReturn = false
     private val nowHandler = Handler(Looper.getMainLooper())
     private val nowLineRunnable = object : Runnable {
         override fun run() {
@@ -486,6 +487,10 @@ class EpgChannelListActivity : BaseActivity() {
         val streamId = channel.stream_id ?: return
         val server = prefs.getServer().trim().trimEnd('/')
         val url = "$server/live/${prefs.getUsername()}/${prefs.getPassword()}/$streamId.m3u8"
+        // A second OK on the already playing EPG channel opens fullscreen.
+        // Mark that return path explicitly so a normal EPG resume never adopts
+        // a stale channel left in PlayerState by Live TV.
+        expectingFullscreenReturn = selectedChannel?.stream_id == streamId
         pendingFocusChannelId = streamId
         pendingFocusProgramKey = program?.let { "${channel.stream_id}|${it.startTimestamp ?: Long.MAX_VALUE}|${it.stopTimestamp ?: Long.MIN_VALUE}" }
         selectedChannel = channel
@@ -614,6 +619,8 @@ class EpgChannelListActivity : BaseActivity() {
 
     override fun onResume() {
         super.onResume()
+        if (!expectingFullscreenReturn) return
+
         // Sync the EPG selection with the channel actually playing in fullscreen.
         // Live TV uses the same PlayerState independently; no Live TV code is changed.
         val playingChannel = com.network24.player.features.player.state.PlayerState.currentChannel()
@@ -621,6 +628,7 @@ class EpgChannelListActivity : BaseActivity() {
         if (streamId != null) {
             val localChannel = channels.firstOrNull { it.stream_id == streamId }
             if (localChannel != null) {
+                expectingFullscreenReturn = false
                 selectedChannel = localChannel
                 pendingFocusChannelId = streamId
                 pendingFocusProgramKey = null
