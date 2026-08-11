@@ -42,7 +42,7 @@ class EpgChannelListActivity : BaseActivity() {
     private val channels = mutableListOf<LiveChannel>()
     private val epgByChannel = mutableMapOf<String, List<EpgEntity>>()
     private var selectedChannel: LiveChannel? = null
-    private val channelWidthDp = 220
+    private var channelWidthDp = 220
     private val minuteWidthDp = 9.0f
     private val rowHeightDp = 64
     private val headerHeightDp = 38
@@ -71,8 +71,33 @@ class EpgChannelListActivity : BaseActivity() {
         binding.txtCategoryName.text = categoryName.ifBlank { "LIVE WITH EPG" }
         binding.btnBack.setOnClickListener { finish() }
         PlayerManager.attach(this, binding.playerView)
+        setupChannelColumnWidth()
         setupStickyScrolling()
         loadChannels()
+    }
+
+    private fun setupChannelColumnWidth() {
+        binding.epgArea.post {
+            val density = resources.displayMetrics.density
+            val playerWidthPx = (binding.topCard.width - dp(16)).coerceAtLeast(0)
+            val targetPx = (playerWidthPx * 0.30f).toInt()
+            channelWidthDp = (targetPx / density).toInt().coerceAtLeast(220)
+
+            binding.stickyDate.layoutParams = binding.stickyDate.layoutParams.apply { width = targetPx }
+            binding.epgHeaderScroll.layoutParams = binding.epgHeaderScroll.layoutParams.apply {
+                width = (binding.epgArea.width - targetPx).coerceAtLeast(0)
+                marginStart = targetPx
+            }
+            binding.channelVerticalScroll.layoutParams = binding.channelVerticalScroll.layoutParams.apply {
+                width = targetPx
+            }
+            binding.channelVerticalScroll.getChildAt(0)?.layoutParams?.width = targetPx
+            binding.epgHorizontalScroll.layoutParams = binding.epgHorizontalScroll.layoutParams.apply {
+                marginStart = targetPx
+            }
+            binding.epgArea.requestLayout()
+            if (channels.isNotEmpty()) renderGrid(preserveScroll = true)
+        }
     }
 
     private fun setupStickyScrolling() {
@@ -152,11 +177,7 @@ class EpgChannelListActivity : BaseActivity() {
                 val now = System.currentTimeMillis()
                 val end = startOfDay(2)
                 val db = DatabaseProvider.get(this@EpgChannelListActivity)
-                var listings = if (ids.isEmpty()) {
-                    emptyList()
-                } else {
-                    db.epgDao().getByEpgChannelIds(ids, now, end)
-                }
+                var listings = if (ids.isEmpty()) emptyList() else db.epgDao().getByEpgChannelIds(ids, now, end)
                 if (ids.isNotEmpty() && listings.isEmpty()) {
                     val syncResult = SyncManager(this@EpgChannelListActivity).syncFullEpg(force = true)
                     if (syncResult !is com.network24.player.core.sync.SyncResult.Error) {
@@ -178,25 +199,20 @@ class EpgChannelListActivity : BaseActivity() {
     private fun renderGrid(preserveScroll: Boolean) {
         val savedX = if (preserveScroll) binding.epgHorizontalScroll.scrollX else 0
         val savedY = if (preserveScroll) binding.epgVerticalScroll.scrollY else 0
-
         timelineStart = floorToHalfHour(System.currentTimeMillis())
         timelineEnd = startOfDay(2)
         if (timelineEnd <= timelineStart) timelineEnd = timelineStart + 2L * 24L * 60L * 60L * 1000L
-
         binding.epgHeaderContainer.removeAllViews()
         binding.channelContainer.removeAllViews()
         binding.epgRowsContainer.removeAllViews()
-
         renderTimelineHeader()
         channels.forEachIndexed { index, channel ->
             addStickyChannel(channel, index)
             addEpgRow(channel, index)
         }
-
         binding.txtEpgStatus.text = "${channels.size} channels • 2-day guide"
         if (selectedChannel == null && channels.isNotEmpty()) updateTopInfo(channels.first())
         updateStickyDate(savedX)
-
         binding.epgArea.post {
             binding.epgHorizontalScroll.scrollTo(savedX.coerceAtLeast(0), 0)
             binding.epgHeaderScroll.scrollTo(savedX.coerceAtLeast(0), 0)
@@ -208,10 +224,7 @@ class EpgChannelListActivity : BaseActivity() {
 
     private fun renderTimelineHeader() {
         val totalMinutes = ((timelineEnd - timelineStart) / 60_000L).coerceAtLeast(30L)
-        val timeline = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
+        val timeline = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         val time = Calendar.getInstance().apply { timeInMillis = timelineStart }
         var elapsed = 0L
         while (elapsed < totalMinutes) {
@@ -237,36 +250,20 @@ class EpgChannelListActivity : BaseActivity() {
     }
 
     private fun addEpgRow(channel: LiveChannel, index: Int) {
-        val timeline = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        val programs = epgByChannel[channel.epg_channel_id.orEmpty()].orEmpty()
-            .filter {
-                (it.stopTimestamp ?: 0L) > timelineStart &&
-                    (it.startTimestamp ?: Long.MAX_VALUE) < timelineEnd
-            }
-            .sortedBy { it.startTimestamp ?: Long.MAX_VALUE }
-
-        if (programs.isEmpty()) {
-            addNoInformationBlock(timeline, timelineEnd - timelineStart)
-        } else {
+        val timeline = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        val programs = epgByChannel[channel.epg_channel_id.orEmpty()].orEmpty().filter {
+            (it.stopTimestamp ?: 0L) > timelineStart && (it.startTimestamp ?: Long.MAX_VALUE) < timelineEnd
+        }.sortedBy { it.startTimestamp ?: Long.MAX_VALUE }
+        if (programs.isEmpty()) addNoInformationBlock(timeline, timelineEnd - timelineStart) else {
             var cursor = timelineStart
             programs.forEach { program ->
                 val start = (program.startTimestamp ?: cursor).coerceIn(timelineStart, timelineEnd)
                 val stop = (program.stopTimestamp ?: (start + 30L * 60L * 1000L)).coerceIn(timelineStart, timelineEnd)
-                if (start > cursor) {
-                    addEmptyBlock(timeline, start - cursor)
-                    cursor = start
-                }
-                if (stop > start) {
-                    addProgramBlock(timeline, channel, program, stop - start)
-                    cursor = stop
-                }
+                if (start > cursor) { addEmptyBlock(timeline, start - cursor); cursor = start }
+                if (stop > start) { addProgramBlock(timeline, channel, program, stop - start); cursor = stop }
             }
             if (cursor < timelineEnd) addEmptyBlock(timeline, timelineEnd - cursor)
         }
-
         val rowFrame = FrameLayout(this)
         rowFrame.addView(timeline, FrameLayout.LayoutParams(-2, dp(rowHeightDp)))
         if (isTodayTimeline()) addNowLine(rowFrame, timelineStart, rowHeightDp)
@@ -281,29 +278,14 @@ class EpgChannelListActivity : BaseActivity() {
             isClickable = true
             setPadding(dp(8), dp(4), dp(8), dp(4))
             background = channelBackground(channel, false)
-            setOnFocusChangeListener { v, hasFocus ->
-                v.background = channelBackground(channel, hasFocus)
-                if (hasFocus) updateTopInfo(channel)
-            }
+            setOnFocusChangeListener { v, hasFocus -> v.background = channelBackground(channel, hasFocus); if (hasFocus) updateTopInfo(channel) }
             setOnClickListener { playChannel(channel) }
-
-            val number = TextView(this@EpgChannelListActivity).apply {
-                text = "${index + 1}"
-                gravity = Gravity.CENTER
-                setTextColor(Color.WHITE)
-                textSize = 14f
-                setTypeface(typeface, android.graphics.Typeface.BOLD)
-            }
-            addView(number, LinearLayout.LayoutParams(dp(28), -1))
 
             val logo = ImageView(this@EpgChannelListActivity).apply {
                 scaleType = ImageView.ScaleType.CENTER_INSIDE
-                load(channel.stream_icon) {
-                    placeholder(R.drawable.app_logo)
-                    error(R.drawable.app_logo)
-                }
+                load(channel.stream_icon) { placeholder(R.drawable.app_logo); error(R.drawable.app_logo) }
             }
-            addView(logo, LinearLayout.LayoutParams(dp(62), dp(52)).apply { marginEnd = dp(6) })
+            addView(logo, LinearLayout.LayoutParams(dp(62), dp(52)).apply { marginEnd = dp(10) })
 
             val name = TextView(this@EpgChannelListActivity).apply {
                 text = channel.name ?: "Unknown CHANNEL"
@@ -335,10 +317,7 @@ class EpgChannelListActivity : BaseActivity() {
 
     private fun addEmptyBlock(parent: LinearLayout, durationMs: Long) {
         val minutes = (durationMs / 60_000L).coerceAtLeast(5L)
-        parent.addView(
-            View(this),
-            LinearLayout.LayoutParams((minutes * minuteWidthDp).toInt().coerceAtLeast(dp(18)), dp(rowHeightDp))
-        )
+        parent.addView(View(this), LinearLayout.LayoutParams((minutes * minuteWidthDp).toInt().coerceAtLeast(dp(18)), dp(rowHeightDp)))
     }
 
     private fun addProgramBlock(parent: LinearLayout, channel: LiveChannel, program: EpgEntity, durationMs: Long) {
@@ -349,15 +328,11 @@ class EpgChannelListActivity : BaseActivity() {
         val title = program.title?.takeIf { it.isNotBlank() } ?: "No Program Info"
         val minutes = (durationMs / 60_000L).coerceAtLeast(5L)
         val cardWidth = (minutes * minuteWidthDp).toInt().coerceAtLeast(dp(55))
-
         val card = FrameLayout(this).apply {
             isFocusable = true
             isClickable = true
             background = programBackground(channel, program, isNow, false)
-            setOnFocusChangeListener { v, hasFocus ->
-                v.background = programBackground(channel, program, isNow, hasFocus)
-                if (hasFocus) updateTopInfo(channel, program)
-            }
+            setOnFocusChangeListener { v, hasFocus -> v.background = programBackground(channel, program, isNow, hasFocus); if (hasFocus) updateTopInfo(channel, program) }
             setOnClickListener { playChannel(channel, program) }
         }
         val text = TextView(this).apply {
@@ -371,17 +346,12 @@ class EpgChannelListActivity : BaseActivity() {
             ellipsize = android.text.TextUtils.TruncateAt.END
         }
         card.addView(text, FrameLayout.LayoutParams(-1, -1))
-
         if (isNow && stop > start) {
             val progress = ((now - start).toFloat() / (stop - start).toFloat()).coerceIn(0f, 1f)
             val progressWidth = (cardWidth * progress).toInt().coerceAtLeast(dp(3))
             val progressLine = View(this).apply { setBackgroundColor(Color.WHITE) }
-            card.addView(
-                progressLine,
-                FrameLayout.LayoutParams(progressWidth, dp(3), Gravity.BOTTOM or Gravity.START)
-            )
+            card.addView(progressLine, FrameLayout.LayoutParams(progressWidth, dp(3), Gravity.BOTTOM or Gravity.START))
         }
-
         parent.addView(card, LinearLayout.LayoutParams(cardWidth, dp(rowHeightDp)).apply { marginEnd = dp(2) })
     }
 
@@ -434,15 +404,10 @@ class EpgChannelListActivity : BaseActivity() {
 
     private fun programBackground(channel: LiveChannel, program: EpgEntity, isNow: Boolean, focused: Boolean): GradientDrawable {
         val selected = selectedChannel?.stream_id != null && selectedChannel?.stream_id == channel.stream_id
-        if (isNow) {
-            return GradientDrawable().apply {
-                cornerRadius = dp(4).toFloat()
-                setColor(Color.rgb(255, 136, 0))
-                setStroke(
-                    dp(if (focused || selected) 3 else 2),
-                    if (focused || selected) Color.WHITE else Color.rgb(255, 193, 7)
-                )
-            }
+        if (isNow) return GradientDrawable().apply {
+            cornerRadius = dp(4).toFloat()
+            setColor(Color.rgb(255, 136, 0))
+            setStroke(dp(if (focused || selected) 3 else 2), if (focused || selected) Color.WHITE else Color.rgb(255, 193, 7))
         }
         return roundedBackground(focused || selected, selected)
     }
@@ -450,26 +415,16 @@ class EpgChannelListActivity : BaseActivity() {
     private fun roundedBackground(active: Boolean, strong: Boolean): GradientDrawable {
         val bg = if (strong) Color.rgb(42, 34, 88) else if (active) Color.rgb(34, 32, 68) else Color.rgb(18, 18, 45)
         val stroke = if (strong) Color.rgb(255, 193, 7) else if (active) Color.rgb(120, 130, 255) else Color.rgb(55, 58, 100)
-        return GradientDrawable().apply {
-            cornerRadius = dp(6).toFloat()
-            setColor(bg)
-            setStroke(dp(if (strong) 3 else 2), stroke)
-        }
+        return GradientDrawable().apply { cornerRadius = dp(6).toFloat(); setColor(bg); setStroke(dp(if (strong) 3 else 2), stroke) }
     }
 
     private fun startOfDay(offset: Int): Long = Calendar.getInstance().apply {
-        set(Calendar.HOUR_OF_DAY, 0)
-        set(Calendar.MINUTE, 0)
-        set(Calendar.SECOND, 0)
-        set(Calendar.MILLISECOND, 0)
-        add(Calendar.DAY_OF_YEAR, offset)
+        set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0); add(Calendar.DAY_OF_YEAR, offset)
     }.timeInMillis
 
     private fun floorToHalfHour(timestamp: Long): Long {
         val cal = Calendar.getInstance().apply { timeInMillis = timestamp }
-        cal.set(Calendar.SECOND, 0)
-        cal.set(Calendar.MILLISECOND, 0)
-        cal.set(Calendar.MINUTE, if (cal.get(Calendar.MINUTE) < 30) 0 else 30)
+        cal.set(Calendar.SECOND, 0); cal.set(Calendar.MILLISECOND, 0); cal.set(Calendar.MINUTE, if (cal.get(Calendar.MINUTE) < 30) 0 else 30)
         return cal.timeInMillis
     }
 
