@@ -7,9 +7,11 @@ import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.ScrollView
 import android.widget.HorizontalScrollView
@@ -51,6 +53,7 @@ class EpgChannelListActivity : BaseActivity() {
     private var syncingVertical = false
     private var syncingHorizontal = false
     private var lastHorizontalX = 0
+    private lateinit var loadingMask: FrameLayout
 
     private val nowHandler = Handler(Looper.getMainLooper())
     private val nowLineRunnable = object : Runnable {
@@ -71,9 +74,63 @@ class EpgChannelListActivity : BaseActivity() {
         binding.txtCategoryName.text = categoryName.ifBlank { "LIVE WITH EPG" }
         binding.btnBack.setOnClickListener { finish() }
         PlayerManager.attach(this, binding.playerView)
+        setupLoadingMask()
         setupChannelColumnWidth()
         setupStickyScrolling()
         loadChannels()
+    }
+
+    private fun setupLoadingMask() {
+        loadingMask = FrameLayout(this).apply {
+            setBackgroundColor(Color.argb(205, 8, 6, 24))
+            isClickable = true
+            isFocusable = true
+            elevation = 50f
+        }
+
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(dp(28), dp(24), dp(28), dp(24))
+            background = GradientDrawable().apply {
+                cornerRadius = dp(14).toFloat()
+                setColor(Color.rgb(28, 24, 58))
+                setStroke(dp(1), Color.rgb(76, 64, 125))
+            }
+        }
+
+        val progress = ProgressBar(this).apply {
+            isIndeterminate = true
+            indeterminateTintList = android.content.res.ColorStateList.valueOf(Color.rgb(124, 77, 255))
+        }
+        content.addView(progress, LinearLayout.LayoutParams(dp(48), dp(48)))
+
+        val title = TextView(this).apply {
+            text = "Loading Live With EPG"
+            setTextColor(Color.WHITE)
+            textSize = 17f
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            gravity = Gravity.CENTER
+            setPadding(0, dp(14), 0, 0)
+        }
+        content.addView(title, LinearLayout.LayoutParams(dp(250), LinearLayout.LayoutParams.WRAP_CONTENT))
+
+        val subtitle = TextView(this).apply {
+            text = "Loading channels and programme guide…"
+            setTextColor(Color.rgb(190, 184, 215))
+            textSize = 13f
+            gravity = Gravity.CENTER
+            setPadding(0, dp(5), 0, 0)
+        }
+        content.addView(subtitle, LinearLayout.LayoutParams(dp(250), LinearLayout.LayoutParams.WRAP_CONTENT))
+
+        loadingMask.addView(content, FrameLayout.LayoutParams(dp(310), LinearLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
+        (binding.root as ViewGroup).addView(loadingMask, ViewGroup.LayoutParams(-1, -1))
+        loadingMask.bringToFront()
+    }
+
+    private fun hideLoadingMask() {
+        if (::loadingMask.isInitialized) loadingMask.visibility = View.GONE
     }
 
     private fun setupChannelColumnWidth() {
@@ -145,6 +202,7 @@ class EpgChannelListActivity : BaseActivity() {
             try {
                 if (categoryId.isBlank()) {
                     binding.txtEpgStatus.text = "Invalid category"
+                    hideLoadingMask()
                     return@launch
                 }
                 var result = repository.getChannels(
@@ -159,12 +217,14 @@ class EpgChannelListActivity : BaseActivity() {
                 channels.addAll(result)
                 if (channels.isEmpty()) {
                     binding.txtEpgStatus.text = "No channels available in this category"
+                    hideLoadingMask()
                     return@launch
                 }
                 loadGuideData()
                 nowHandler.postDelayed(nowLineRunnable, 60_000L)
             } catch (e: Exception) {
                 binding.txtEpgStatus.text = e.message ?: "Unable to load channels"
+                hideLoadingMask()
             }
         }
     }
@@ -219,6 +279,7 @@ class EpgChannelListActivity : BaseActivity() {
             binding.epgVerticalScroll.scrollTo(0, savedY.coerceAtLeast(0))
             binding.channelVerticalScroll.scrollTo(0, savedY.coerceAtLeast(0))
             updateStickyDate(binding.epgHorizontalScroll.scrollX)
+            hideLoadingMask()
         }
     }
 
