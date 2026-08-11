@@ -73,7 +73,7 @@
                 android:background="@android:color/black"
                 app:use_controller="true"
                 app:show_buffering="when_playing"
-                app:layout_constraintWidth_percent="0.48"
+                app:layout_constraintWidth_percent="0.40"
                 app:layout_constraintTop_toTopOf="parent"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintStart_toStartOf="parent" />
@@ -114,7 +114,8 @@
                     android:layout_marginTop="6dp"
                     android:text="Select a channel to play"
                     android:textColor="#BDBDBD"
-                    android:textSize="13sp" />
+                    android:textSize="13sp"
+                    android:visibility="gone" />
                 <TextView
                     android:id="@+id/txtDescription"
                     android:layout_width="match_parent"
