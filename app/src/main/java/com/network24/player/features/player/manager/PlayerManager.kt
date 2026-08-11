@@ -3,6 +3,7 @@ package com.network24.player.features.player.manager
 import android.app.Activity
 import android.app.Application
 import android.content.Context
+import android.content.Intent
 import androidx.annotation.OptIn
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
@@ -12,6 +13,9 @@ import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import com.network24.player.core.net.StreamDataSourceFactory
+import com.network24.player.features.live.models.LiveChannel
+import com.network24.player.features.player.activity.PlayerActivity
+import com.network24.player.features.player.state.PlayerState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -27,6 +31,7 @@ object PlayerManager {
     private var currentPlayerView: PlayerView? = null
     private var ownerActivity: Activity? = null
     private var lifecycleCallbacksRegistered = false
+    private var preservePlaybackThroughFullscreenReturn = false
 
     private var rebufferCount = 0
     private var bufferingStartedAtMs = 0L
@@ -34,9 +39,6 @@ object PlayerManager {
     private var lastError: PlaybackException? = null
     private var lastPlaybackState = Player.STATE_IDLE
 
-    // Live Channels preview recovery. This is intentionally owned by PlayerManager
-    // so it also survives ExoPlayer replacement without requiring a listener to be
-    // re-attached to every newly created player instance.
     private var liveRecoveryJob: Job? = null
     private var liveRecoveryStartedAtMs = 0L
     private var liveRecoveryAttempt = 0
@@ -59,6 +61,10 @@ object PlayerManager {
             override fun onActivityDestroyed(activity: Activity) = Unit
 
             override fun onActivityStopped(activity: Activity) {
+                if (activity.javaClass.name.endsWith("features.player.activity.PlayerActivity") && ownerActivity !== activity) {
+                    restoreEpgHostFocus(ownerActivity)
+                    return
+                }
                 if (ownerActivity === activity) {
                     cancelLiveRecovery()
                     release()
@@ -67,6 +73,17 @@ object PlayerManager {
             }
         })
         lifecycleCallbacksRegistered = true
+    }
+
+    private fun restoreEpgHostFocus(host: Activity?) {
+        val epgHost = host ?: return
+        if (!epgHost.javaClass.name.endsWith("features.live.activity.EpgChannelListActivity")) return
+        epgHost.window.decorView.postDelayed({
+            runCatching {
+                val restore = epgHost.javaClass.getDeclaredMethod("restorePendingFocus").apply { isAccessible = true }
+                restore.invoke(epgHost)
+            }
+        }, 120L)
     }
 
     fun getPlayer(context: Context): ExoPlayer {
@@ -123,8 +140,6 @@ object PlayerManager {
             currentPlayerView = playerView
         }
 
-        // If the previous hosting activity left the screen and released the
-        // player, reconnect the same channel when the activity comes back.
         if (currentUrl == null && !lastStreamUrl.isNullOrBlank()) {
             currentUrl = lastStreamUrl
             resetDiagnostics()
@@ -144,6 +159,13 @@ object PlayerManager {
     }
 
     fun play(context: Context, playerView: PlayerView, streamUrl: String) {
+        // Live With EPG uses the same preview player. A second OK/click on the
+        // already-playing channel means "open fullscreen", matching ChannelListActivity.
+        if (currentUrl == streamUrl && context is Activity && context.javaClass.name.endsWith("features.live.activity.EpgChannelListActivity")) {
+            openEpgFullscreen(context, streamUrl)
+            return
+        }
+
         cancelLiveRecovery()
 
         if (currentUrl != null && currentUrl != streamUrl) {
@@ -172,6 +194,32 @@ object PlayerManager {
         player.play()
     }
 
+    private fun openEpgFullscreen(context: Activity, streamUrl: String) {
+        try {
+            val host = context
+            val channelsField = host.javaClass.getDeclaredField("channels").apply { isAccessible = true }
+            @Suppress("UNCHECKED_CAST")
+            val channels = channelsField.get(host) as? List<LiveChannel> ?: return
+
+            val streamId = streamUrl.substringAfterLast('/').substringBefore('.').toIntOrNull() ?: return
+            val position = channels.indexOfFirst { it.stream_id == streamId }
+            if (position < 0) return
+
+            PlayerState.channels.clear()
+            PlayerState.channels.addAll(channels)
+            PlayerState.currentPosition = position
+
+            runCatching {
+                host.javaClass.getDeclaredField("pendingFocusChannelId").apply { isAccessible = true }.set(host, streamId)
+            }
+
+            preservePlaybackForFullscreenReturn()
+            host.startActivity(Intent(host, PlayerActivity::class.java))
+        } catch (_: Exception) {
+            // If reflection cannot resolve the EPG host, keep normal preview playback.
+        }
+    }
+
     private fun releaseCurrentStreamForSwitch() {
         cancelLiveRecovery()
         currentPlayerView?.player = null
@@ -193,7 +241,18 @@ object PlayerManager {
         player.play()
     }
 
-    fun pause() { exoPlayer?.pause() }
+    fun pause() {
+        if (preservePlaybackThroughFullscreenReturn) {
+            preservePlaybackThroughFullscreenReturn = false
+            return
+        }
+        exoPlayer?.pause()
+    }
+
+    fun preservePlaybackForFullscreenReturn() {
+        preservePlaybackThroughFullscreenReturn = true
+    }
+
     fun resume() { exoPlayer?.play() }
 
     fun stop() {
@@ -205,8 +264,6 @@ object PlayerManager {
 
     fun release() {
         cancelLiveRecovery()
-        // Keep the last URL only so a screen that comes back can reconnect.
-        // The actual ExoPlayer, media items and HTTP/HLS connection are released.
         if (!currentUrl.isNullOrBlank()) lastStreamUrl = currentUrl
         currentPlayerView?.player = null
         currentPlayerView = null
