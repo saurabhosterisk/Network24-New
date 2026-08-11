@@ -303,7 +303,12 @@ class EpgChannelListActivity : BaseActivity() {
         panel.id = View.generateViewId()
         panel.tag = channel.stream_id
         channelFocusViews.add(panel)
-        binding.channelContainer.addView(panel, LinearLayout.LayoutParams(dp(channelWidthDp), dp(rowHeightDp)))
+        // Keep the exact same 5dp top/bottom rhythm as the EPG cards.
+        // Total row footprint remains 70dp so both columns stay perfectly aligned.
+        binding.channelContainer.addView(panel, LinearLayout.LayoutParams(dp(channelWidthDp), dp(rowHeightDp - 10)).apply {
+            topMargin = dp(5)
+            bottomMargin = dp(5)
+        })
     }
 
     private fun addEpgRow(channel: LiveChannel, index: Int) {
