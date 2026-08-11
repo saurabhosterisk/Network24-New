@@ -54,6 +54,10 @@ class EpgChannelListActivity : BaseActivity() {
     private var syncingHorizontal = false
     private var lastHorizontalX = 0
     private lateinit var loadingMask: FrameLayout
+    private val channelFocusViews = mutableListOf<View>()
+    private val programFocusRows = mutableListOf<MutableList<View>>()
+    private var pendingFocusChannelId: String? = null
+    private var pendingFocusProgramKey: String? = null
 
     private val nowHandler = Handler(Looper.getMainLooper())
     private val nowLineRunnable = object : Runnable {
@@ -87,7 +91,6 @@ class EpgChannelListActivity : BaseActivity() {
             isFocusable = true
             elevation = 50f
         }
-
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
@@ -98,13 +101,11 @@ class EpgChannelListActivity : BaseActivity() {
                 setStroke(dp(1), Color.rgb(76, 64, 125))
             }
         }
-
         val progress = ProgressBar(this).apply {
             isIndeterminate = true
             indeterminateTintList = android.content.res.ColorStateList.valueOf(Color.rgb(124, 77, 255))
         }
         content.addView(progress, LinearLayout.LayoutParams(dp(48), dp(48)))
-
         val title = TextView(this).apply {
             text = "Loading Live With EPG"
             setTextColor(Color.WHITE)
@@ -114,7 +115,6 @@ class EpgChannelListActivity : BaseActivity() {
             setPadding(0, dp(14), 0, 0)
         }
         content.addView(title, LinearLayout.LayoutParams(dp(250), LinearLayout.LayoutParams.WRAP_CONTENT))
-
         val subtitle = TextView(this).apply {
             text = "Loading channels and programme guide…"
             setTextColor(Color.rgb(190, 184, 215))
@@ -123,7 +123,6 @@ class EpgChannelListActivity : BaseActivity() {
             setPadding(0, dp(5), 0, 0)
         }
         content.addView(subtitle, LinearLayout.LayoutParams(dp(250), LinearLayout.LayoutParams.WRAP_CONTENT))
-
         loadingMask.addView(content, FrameLayout.LayoutParams(dp(310), LinearLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
         (binding.root as ViewGroup).addView(loadingMask, ViewGroup.LayoutParams(-1, -1))
         loadingMask.bringToFront()
@@ -139,19 +138,14 @@ class EpgChannelListActivity : BaseActivity() {
             val playerWidthPx = (binding.topCard.width - dp(16)).coerceAtLeast(0)
             val targetPx = (playerWidthPx * 0.30f).toInt()
             channelWidthDp = (targetPx / density).toInt().coerceAtLeast(220)
-
             binding.stickyDate.layoutParams = binding.stickyDate.layoutParams.apply { width = targetPx }
             binding.epgHeaderScroll.layoutParams = binding.epgHeaderScroll.layoutParams.apply {
                 width = (binding.epgArea.width - targetPx).coerceAtLeast(0)
                 marginStart = targetPx
             }
-            binding.channelVerticalScroll.layoutParams = binding.channelVerticalScroll.layoutParams.apply {
-                width = targetPx
-            }
+            binding.channelVerticalScroll.layoutParams = binding.channelVerticalScroll.layoutParams.apply { width = targetPx }
             binding.channelVerticalScroll.getChildAt(0)?.layoutParams?.width = targetPx
-            binding.epgHorizontalScroll.layoutParams = binding.epgHorizontalScroll.layoutParams.apply {
-                marginStart = targetPx
-            }
+            binding.epgHorizontalScroll.layoutParams = binding.epgHorizontalScroll.layoutParams.apply { marginStart = targetPx }
             binding.epgArea.requestLayout()
             if (channels.isNotEmpty()) renderGrid(preserveScroll = true)
         }
@@ -205,14 +199,8 @@ class EpgChannelListActivity : BaseActivity() {
                     hideLoadingMask()
                     return@launch
                 }
-                var result = repository.getChannels(
-                    prefs.getServer(), prefs.getUsername(), prefs.getPassword(), categoryId, false
-                )
-                if (result.isEmpty()) {
-                    result = repository.getChannels(
-                        prefs.getServer(), prefs.getUsername(), prefs.getPassword(), categoryId, true
-                    )
-                }
+                var result = repository.getChannels(prefs.getServer(), prefs.getUsername(), prefs.getPassword(), categoryId, false)
+                if (result.isEmpty()) result = repository.getChannels(prefs.getServer(), prefs.getUsername(), prefs.getPassword(), categoryId, true)
                 channels.clear()
                 channels.addAll(result)
                 if (channels.isEmpty()) {
@@ -240,9 +228,7 @@ class EpgChannelListActivity : BaseActivity() {
                 var listings = if (ids.isEmpty()) emptyList() else db.epgDao().getByEpgChannelIds(ids, now, end)
                 if (ids.isNotEmpty() && listings.isEmpty()) {
                     val syncResult = SyncManager(this@EpgChannelListActivity).syncFullEpg(force = true)
-                    if (syncResult !is com.network24.player.core.sync.SyncResult.Error) {
-                        listings = db.epgDao().getByEpgChannelIds(ids, now, end)
-                    }
+                    if (syncResult !is com.network24.player.core.sync.SyncResult.Error) listings = db.epgDao().getByEpgChannelIds(ids, now, end)
                 }
                 epgByChannel.clear()
                 epgByChannel.putAll(listings.groupBy { it.epgChannelId.orEmpty() })
@@ -265,13 +251,19 @@ class EpgChannelListActivity : BaseActivity() {
         binding.epgHeaderContainer.removeAllViews()
         binding.channelContainer.removeAllViews()
         binding.epgRowsContainer.removeAllViews()
+        channelFocusViews.clear()
+        programFocusRows.clear()
         renderTimelineHeader()
         channels.forEachIndexed { index, channel ->
             addStickyChannel(channel, index)
             addEpgRow(channel, index)
         }
+        wireFocusNavigation()
         binding.txtEpgStatus.text = "${channels.size} channels • 2-day guide"
-        if (selectedChannel == null && channels.isNotEmpty()) updateTopInfo(channels.first())
+        if (selectedChannel == null && channels.isNotEmpty()) {
+            updateTopInfo(channels.first())
+            if (!preserveScroll) pendingFocusChannelId = channels.first().stream_id
+        }
         updateStickyDate(savedX)
         binding.epgArea.post {
             binding.epgHorizontalScroll.scrollTo(savedX.coerceAtLeast(0), 0)
@@ -279,6 +271,7 @@ class EpgChannelListActivity : BaseActivity() {
             binding.epgVerticalScroll.scrollTo(0, savedY.coerceAtLeast(0))
             binding.channelVerticalScroll.scrollTo(0, savedY.coerceAtLeast(0))
             updateStickyDate(binding.epgHorizontalScroll.scrollX)
+            restorePendingFocus()
             hideLoadingMask()
         }
     }
@@ -307,24 +300,34 @@ class EpgChannelListActivity : BaseActivity() {
 
     private fun addStickyChannel(channel: LiveChannel, index: Int) {
         val panel = createChannelPanel(channel, index)
+        panel.id = View.generateViewId()
+        panel.tag = channel.stream_id
+        channelFocusViews.add(panel)
         binding.channelContainer.addView(panel, LinearLayout.LayoutParams(dp(channelWidthDp), dp(rowHeightDp)))
     }
 
     private fun addEpgRow(channel: LiveChannel, index: Int) {
         val timeline = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        val focusablePrograms = mutableListOf<View>()
         val programs = epgByChannel[channel.epg_channel_id.orEmpty()].orEmpty().filter {
             (it.stopTimestamp ?: 0L) > timelineStart && (it.startTimestamp ?: Long.MAX_VALUE) < timelineEnd
         }.sortedBy { it.startTimestamp ?: Long.MAX_VALUE }
-        if (programs.isEmpty()) addNoInformationBlock(timeline, timelineEnd - timelineStart) else {
+        if (programs.isEmpty()) {
+            addNoInformationBlock(timeline, timelineEnd - timelineStart)
+        } else {
             var cursor = timelineStart
             programs.forEach { program ->
                 val start = (program.startTimestamp ?: cursor).coerceIn(timelineStart, timelineEnd)
                 val stop = (program.stopTimestamp ?: (start + 30L * 60L * 1000L)).coerceIn(timelineStart, timelineEnd)
                 if (start > cursor) { addEmptyBlock(timeline, start - cursor); cursor = start }
-                if (stop > start) { addProgramBlock(timeline, channel, program, stop - start); cursor = stop }
+                if (stop > start) {
+                    focusablePrograms.add(addProgramBlock(timeline, channel, program, stop - start))
+                    cursor = stop
+                }
             }
             if (cursor < timelineEnd) addEmptyBlock(timeline, timelineEnd - cursor)
         }
+        programFocusRows.add(focusablePrograms)
         val rowFrame = FrameLayout(this)
         rowFrame.addView(timeline, FrameLayout.LayoutParams(-2, dp(rowHeightDp)))
         if (isTodayTimeline()) addNowLine(rowFrame, timelineStart, rowHeightDp)
@@ -339,16 +342,21 @@ class EpgChannelListActivity : BaseActivity() {
             isClickable = true
             setPadding(dp(8), dp(4), dp(8), dp(4))
             background = channelBackground(channel, false)
-            setOnFocusChangeListener { v, hasFocus -> v.background = channelBackground(channel, hasFocus); if (hasFocus) updateTopInfo(channel) }
+            setOnFocusChangeListener { v, hasFocus ->
+                v.background = channelBackground(channel, hasFocus)
+                if (hasFocus) updateTopInfo(channel)
+            }
             setOnClickListener { playChannel(channel) }
-
             val logo = ImageView(this@EpgChannelListActivity).apply {
+                isFocusable = false
+                isClickable = false
                 scaleType = ImageView.ScaleType.CENTER_INSIDE
                 load(channel.stream_icon) { placeholder(R.drawable.app_logo); error(R.drawable.app_logo) }
             }
             addView(logo, LinearLayout.LayoutParams(dp(62), dp(52)).apply { marginEnd = dp(10) })
-
             val name = TextView(this@EpgChannelListActivity).apply {
+                isFocusable = false
+                isClickable = false
                 text = channel.name ?: "Unknown CHANNEL"
                 setTextColor(Color.WHITE)
                 textSize = 15f
@@ -382,23 +390,29 @@ class EpgChannelListActivity : BaseActivity() {
         parent.addView(View(this), LinearLayout.LayoutParams((minutes * minuteWidthDp).toInt().coerceAtLeast(dp(18)), dp(rowHeightDp)))
     }
 
-    private fun addProgramBlock(parent: LinearLayout, channel: LiveChannel, program: EpgEntity, durationMs: Long) {
+    private fun addProgramBlock(parent: LinearLayout, channel: LiveChannel, program: EpgEntity, durationMs: Long): View {
         val now = System.currentTimeMillis()
         val start = program.startTimestamp ?: Long.MAX_VALUE
         val stop = program.stopTimestamp ?: Long.MIN_VALUE
         val isNow = start <= now && stop > now
         val title = program.title?.takeIf { it.isNotBlank() } ?: "No Program Info"
         val minutes = (durationMs / 60_000L).coerceAtLeast(5L)
-        val cardGap = dp(6)
-        val cardWidth = ((minutes * minuteWidthDp).toInt() - cardGap).coerceAtLeast(dp(55))
+        val cardWidth = (minutes * minuteWidthDp).toInt().coerceAtLeast(dp(55))
         val card = FrameLayout(this).apply {
+            id = View.generateViewId()
+            tag = "${channel.stream_id}|${start}|${stop}"
             isFocusable = true
             isClickable = true
             background = programBackground(channel, program, isNow, false)
-            setOnFocusChangeListener { v, hasFocus -> v.background = programBackground(channel, program, isNow, hasFocus); if (hasFocus) updateTopInfo(channel, program) }
+            setOnFocusChangeListener { v, hasFocus ->
+                v.background = programBackground(channel, program, isNow, hasFocus)
+                if (hasFocus) updateTopInfo(channel, program)
+            }
             setOnClickListener { playChannel(channel, program) }
         }
         val text = TextView(this).apply {
+            isFocusable = false
+            isClickable = false
             this.text = title
             gravity = Gravity.CENTER_VERTICAL
             setTextColor(Color.WHITE)
@@ -412,10 +426,11 @@ class EpgChannelListActivity : BaseActivity() {
         if (isNow && stop > start) {
             val progress = ((now - start).toFloat() / (stop - start).toFloat()).coerceIn(0f, 1f)
             val progressWidth = (cardWidth * progress).toInt().coerceAtLeast(dp(3))
-            val progressLine = View(this).apply { setBackgroundColor(Color.WHITE) }
+            val progressLine = View(this).apply { setBackgroundColor(Color.WHITE); isFocusable = false }
             card.addView(progressLine, FrameLayout.LayoutParams(progressWidth, dp(3), Gravity.BOTTOM or Gravity.START))
         }
-        parent.addView(card, LinearLayout.LayoutParams(cardWidth, dp(rowHeightDp)).apply { marginEnd = cardGap })
+        parent.addView(card, LinearLayout.LayoutParams(cardWidth, dp(rowHeightDp)).apply { marginEnd = dp(6) })
+        return card
     }
 
     private fun addNowLine(parent: FrameLayout, start: Long, heightDp: Int) {
@@ -443,10 +458,72 @@ class EpgChannelListActivity : BaseActivity() {
         val streamId = channel.stream_id ?: return
         val server = prefs.getServer().trim().trimEnd('/')
         val url = "$server/live/${prefs.getUsername()}/${prefs.getPassword()}/$streamId.m3u8"
-        PlayerManager.play(this, binding.playerView, url)
+        pendingFocusChannelId = streamId
+        pendingFocusProgramKey = program?.let {
+            "${channel.stream_id}|${it.startTimestamp ?: Long.MAX_VALUE}|${it.stopTimestamp ?: Long.MIN_VALUE}"
+        }
         selectedChannel = channel
         updateTopInfo(channel, program)
+        PlayerManager.play(this, binding.playerView, url)
         renderGrid(preserveScroll = true)
+    }
+
+    private fun wireFocusNavigation() {
+        if (channelFocusViews.isEmpty()) return
+        channelFocusViews.forEachIndexed { index, view ->
+            view.nextFocusUpId = if (index > 0) channelFocusViews[index - 1].id else view.id
+            view.nextFocusDownId = if (index < channelFocusViews.lastIndex) channelFocusViews[index + 1].id else view.id
+            val row = programFocusRows.getOrNull(index).orEmpty()
+            if (row.isNotEmpty()) {
+                view.nextFocusRightId = row.first().id
+                row.forEachIndexed { programIndex, programView ->
+                    programView.nextFocusLeftId = view.id
+                    programView.nextFocusRightId = if (programIndex < row.lastIndex) row[programIndex + 1].id else programView.id
+                }
+            }
+        }
+        for (rowIndex in programFocusRows.indices) {
+            programFocusRows[rowIndex].forEach { programView ->
+                val parts = programView.tag?.toString()?.split("|") ?: emptyList()
+                val start = parts.getOrNull(1)?.toLongOrNull() ?: 0L
+                val stop = parts.getOrNull(2)?.toLongOrNull() ?: start
+                val center = (start + stop) / 2L
+                val up = nearestProgramInRow(rowIndex - 1, center)
+                val down = nearestProgramInRow(rowIndex + 1, center)
+                programView.nextFocusUpId = up?.id ?: channelFocusViews.getOrNull(rowIndex)?.id ?: programView.id
+                programView.nextFocusDownId = down?.id ?: channelFocusViews.getOrNull(rowIndex)?.id ?: programView.id
+            }
+        }
+    }
+
+    private fun nearestProgramInRow(rowIndex: Int, targetCenter: Long): View? {
+        val row = programFocusRows.getOrNull(rowIndex) ?: return null
+        return row.minByOrNull { view ->
+            val parts = view.tag?.toString()?.split("|") ?: return@minByOrNull Long.MAX_VALUE
+            val start = parts.getOrNull(1)?.toLongOrNull() ?: return@minByOrNull Long.MAX_VALUE
+            val stop = parts.getOrNull(2)?.toLongOrNull() ?: start
+            kotlin.math.abs(((start + stop) / 2L) - targetCenter)
+        }
+    }
+
+    private fun restorePendingFocus() {
+        val streamId = pendingFocusChannelId ?: return
+        val channelIndex = channels.indexOfFirst { it.stream_id == streamId }
+        if (channelIndex < 0) return
+        val targetY = channelIndex * dp(rowHeightDp)
+        binding.channelVerticalScroll.post {
+            binding.channelVerticalScroll.scrollTo(0, targetY)
+            binding.epgVerticalScroll.scrollTo(0, targetY)
+            val programKey = pendingFocusProgramKey
+            val target = if (!programKey.isNullOrBlank()) {
+                programFocusRows.getOrNull(channelIndex)?.firstOrNull { it.tag?.toString() == programKey }
+            } else null
+            (target ?: channelFocusViews.getOrNull(channelIndex))?.post {
+                requestFocus()
+                pendingFocusChannelId = null
+                pendingFocusProgramKey = null
+            }
+        }
     }
 
     private fun updateTopInfo(channel: LiveChannel, program: EpgEntity? = null) {
