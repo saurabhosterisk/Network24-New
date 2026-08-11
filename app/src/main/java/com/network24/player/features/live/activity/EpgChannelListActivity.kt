@@ -361,7 +361,8 @@ class EpgChannelListActivity : BaseActivity() {
 
     private fun addNoInformationBlock(parent: LinearLayout, durationMs: Long) {
         val minutes = (durationMs / 60_000L).coerceAtLeast(5L)
-        val cardWidth = (minutes * minuteWidthDp).toInt().coerceAtLeast(dp(120))
+        val cardGap = dp(6)
+        val cardWidth = ((minutes * minuteWidthDp).toInt() - cardGap).coerceAtLeast(dp(120))
         val card = TextView(this).apply {
             text = "No Information"
             gravity = Gravity.CENTER_VERTICAL
@@ -373,7 +374,7 @@ class EpgChannelListActivity : BaseActivity() {
             ellipsize = android.text.TextUtils.TruncateAt.END
             background = roundedBackground(false, false)
         }
-        parent.addView(card, LinearLayout.LayoutParams(cardWidth, dp(rowHeightDp)).apply { marginEnd = dp(2) })
+        parent.addView(card, LinearLayout.LayoutParams(cardWidth, dp(rowHeightDp)).apply { marginEnd = cardGap })
     }
 
     private fun addEmptyBlock(parent: LinearLayout, durationMs: Long) {
@@ -388,7 +389,8 @@ class EpgChannelListActivity : BaseActivity() {
         val isNow = start <= now && stop > now
         val title = program.title?.takeIf { it.isNotBlank() } ?: "No Program Info"
         val minutes = (durationMs / 60_000L).coerceAtLeast(5L)
-        val cardWidth = (minutes * minuteWidthDp).toInt().coerceAtLeast(dp(55))
+        val cardGap = dp(6)
+        val cardWidth = ((minutes * minuteWidthDp).toInt() - cardGap).coerceAtLeast(dp(55))
         val card = FrameLayout(this).apply {
             isFocusable = true
             isClickable = true
@@ -413,7 +415,7 @@ class EpgChannelListActivity : BaseActivity() {
             val progressLine = View(this).apply { setBackgroundColor(Color.WHITE) }
             card.addView(progressLine, FrameLayout.LayoutParams(progressWidth, dp(3), Gravity.BOTTOM or Gravity.START))
         }
-        parent.addView(card, LinearLayout.LayoutParams(cardWidth, dp(rowHeightDp)).apply { marginEnd = dp(2) })
+        parent.addView(card, LinearLayout.LayoutParams(cardWidth, dp(rowHeightDp)).apply { marginEnd = cardGap })
     }
 
     private fun addNowLine(parent: FrameLayout, start: Long, heightDp: Int) {
