@@ -234,24 +234,46 @@ class EpgChannelListActivity : BaseActivity() {
         val programs = epgByChannel[channel.epg_channel_id.orEmpty()].orEmpty()
             .filter { (it.stopTimestamp ?: 0L) > timelineStart && (it.startTimestamp ?: Long.MAX_VALUE) < dayEnd }
             .sortedBy { it.startTimestamp ?: Long.MAX_VALUE }
-        var cursor = timelineStart
-        programs.forEach { program ->
-            val start = (program.startTimestamp ?: cursor).coerceIn(timelineStart, dayEnd)
-            val stop = (program.stopTimestamp ?: (start + 30L * 60L * 1000L)).coerceIn(timelineStart, dayEnd)
-            if (start > cursor) {
-                addEmptyBlock(timeline, start - cursor)
-                cursor = start
+
+        if (programs.isEmpty()) {
+            addNoInformationBlock(timeline, dayEnd - timelineStart)
+        } else {
+            var cursor = timelineStart
+            programs.forEach { program ->
+                val start = (program.startTimestamp ?: cursor).coerceIn(timelineStart, dayEnd)
+                val stop = (program.stopTimestamp ?: (start + 30L * 60L * 1000L)).coerceIn(timelineStart, dayEnd)
+                if (start > cursor) {
+                    addEmptyBlock(timeline, start - cursor)
+                    cursor = start
+                }
+                if (stop > start) {
+                    addProgramBlock(timeline, channel, program, stop - start)
+                    cursor = stop
+                }
             }
-            if (stop > start) {
-                addProgramBlock(timeline, channel, program, stop - start)
-                cursor = stop
-            }
+            if (cursor < dayEnd) addEmptyBlock(timeline, dayEnd - cursor)
         }
-        if (cursor < dayEnd) addEmptyBlock(timeline, dayEnd - cursor)
         timelineFrame.addView(timeline, FrameLayout.LayoutParams(-2, dp(64)))
         if (selectedDay == 0) addNowLine(timelineFrame, timelineStart, 64)
         row.addView(timelineFrame)
         binding.gridContainer.addView(row)
+    }
+
+    private fun addNoInformationBlock(parent: LinearLayout, durationMs: Long) {
+        val minutes = (durationMs / 60_000L).coerceAtLeast(5L)
+        val cardWidth = (minutes * minuteWidthDp).toInt().coerceAtLeast(dp(120))
+        val card = TextView(this).apply {
+            text = "No Information"
+            gravity = Gravity.CENTER_VERTICAL
+            setTextColor(Color.WHITE)
+            textSize = 15f
+            setPadding(dp(12), dp(4), dp(12), dp(4))
+            maxLines = 1
+            isSingleLine = true
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            background = roundedBackground(false, false)
+        }
+        parent.addView(card, LinearLayout.LayoutParams(cardWidth, dp(64)).apply { marginEnd = dp(2) })
     }
 
     private fun addEmptyBlock(parent: LinearLayout, durationMs: Long) {
