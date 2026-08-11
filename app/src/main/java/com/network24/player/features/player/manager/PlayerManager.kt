@@ -24,7 +24,6 @@ import kotlinx.coroutines.launch
 
 @OptIn(UnstableApi::class)
 object PlayerManager {
-
     private var exoPlayer: ExoPlayer? = null
     private var currentUrl: String? = null
     private var lastStreamUrl: String? = null
@@ -32,13 +31,11 @@ object PlayerManager {
     private var ownerActivity: Activity? = null
     private var lifecycleCallbacksRegistered = false
     private var preservePlaybackThroughFullscreenReturn = false
-
     private var rebufferCount = 0
     private var bufferingStartedAtMs = 0L
     private var totalBufferingMs = 0L
     private var lastError: PlaybackException? = null
     private var lastPlaybackState = Player.STATE_IDLE
-
     private var liveRecoveryJob: Job? = null
     private var liveRecoveryStartedAtMs = 0L
     private var liveRecoveryAttempt = 0
@@ -51,15 +48,25 @@ object PlayerManager {
     private fun ensureActivityLifecycleCallbacks(context: Context) {
         if (lifecycleCallbacksRegistered) return
         val application = context.applicationContext as? Application ?: return
-
         application.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
             override fun onActivityCreated(activity: Activity, savedInstanceState: android.os.Bundle?) = Unit
             override fun onActivityStarted(activity: Activity) = Unit
-            override fun onActivityResumed(activity: Activity) = Unit
+            override fun onActivityResumed(activity: Activity) {
+                if (activity.javaClass.name.endsWith("features.live.activity.EpgChannelListActivity") && !currentUrl.isNullOrBlank()) {
+                    runCatching {
+                        val bindingField = activity.javaClass.getDeclaredField("binding").apply { isAccessible = true }
+                        val binding = bindingField.get(activity)
+                        val playerView = binding.javaClass.getDeclaredField("playerView").apply { isAccessible = true }.get(binding) as? PlayerView
+                        if (playerView != null) {
+                            attach(activity, playerView)
+                            playerView.post { exoPlayer?.play() }
+                        }
+                    }
+                }
+            }
             override fun onActivityPaused(activity: Activity) = Unit
             override fun onActivitySaveInstanceState(activity: Activity, outState: android.os.Bundle) = Unit
             override fun onActivityDestroyed(activity: Activity) = Unit
-
             override fun onActivityStopped(activity: Activity) {
                 if (activity.javaClass.name.endsWith("features.player.activity.PlayerActivity") && ownerActivity !== activity) {
                     restoreEpgHostFocus(ownerActivity)
@@ -97,11 +104,9 @@ object PlayerManager {
                 .build()
                 .apply {
                     playWhenReady = true
-                    trackSelectionParameters = trackSelectionParameters
-                        .buildUpon()
+                    trackSelectionParameters = trackSelectionParameters.buildUpon()
                         .setSelectUndeterminedTextLanguage(true)
                         .build()
-
                     addListener(object : Player.Listener {
                         override fun onPlaybackStateChanged(playbackState: Int) {
                             val wasBuffering = lastPlaybackState == Player.STATE_BUFFERING
@@ -116,7 +121,6 @@ object PlayerManager {
                             }
                             lastPlaybackState = playbackState
                         }
-
                         override fun onPlayerError(error: PlaybackException) {
                             lastError = error
                             error.printStackTrace()
@@ -132,14 +136,12 @@ object PlayerManager {
     fun attach(context: Context, playerView: PlayerView) {
         ensureActivityLifecycleCallbacks(context)
         if (context is Activity) ownerActivity = context
-
         val player = getPlayer(context)
         if (currentPlayerView !== playerView) {
             currentPlayerView?.player = null
             playerView.player = player
             currentPlayerView = playerView
         }
-
         if (currentUrl == null && !lastStreamUrl.isNullOrBlank()) {
             currentUrl = lastStreamUrl
             resetDiagnostics()
@@ -159,31 +161,20 @@ object PlayerManager {
     }
 
     fun play(context: Context, playerView: PlayerView, streamUrl: String) {
-        // Live With EPG uses the same preview player. A second OK/click on the
-        // already-playing channel means "open fullscreen", matching ChannelListActivity.
         if (currentUrl == streamUrl && context is Activity && context.javaClass.name.endsWith("features.live.activity.EpgChannelListActivity")) {
             openEpgFullscreen(context, streamUrl)
             return
         }
-
         cancelLiveRecovery()
-
-        if (currentUrl != null && currentUrl != streamUrl) {
-            releaseCurrentStreamForSwitch()
-        }
-
+        if (currentUrl != null && currentUrl != streamUrl) releaseCurrentStreamForSwitch()
         val player = getPlayer(context)
         attach(context, playerView)
-
         if (currentUrl == streamUrl) {
             lastStreamUrl = streamUrl
-            if (player.playbackState == Player.STATE_IDLE || player.playbackState == Player.STATE_ENDED) {
-                player.prepare()
-            }
+            if (player.playbackState == Player.STATE_IDLE || player.playbackState == Player.STATE_ENDED) player.prepare()
             player.play()
             return
         }
-
         currentUrl = streamUrl
         lastStreamUrl = streamUrl
         resetDiagnostics()
@@ -196,27 +187,22 @@ object PlayerManager {
 
     private fun openEpgFullscreen(context: Activity, streamUrl: String) {
         try {
-            val host = context
-            val channelsField = host.javaClass.getDeclaredField("channels").apply { isAccessible = true }
+            val channelsField = context.javaClass.getDeclaredField("channels").apply { isAccessible = true }
             @Suppress("UNCHECKED_CAST")
-            val channels = channelsField.get(host) as? List<LiveChannel> ?: return
-
+            val channels = channelsField.get(context) as? List<LiveChannel> ?: return
             val streamId = streamUrl.substringAfterLast('/').substringBefore('.').toIntOrNull() ?: return
             val position = channels.indexOfFirst { it.stream_id == streamId }
             if (position < 0) return
-
             PlayerState.channels.clear()
             PlayerState.channels.addAll(channels)
             PlayerState.currentPosition = position
-
             runCatching {
-                host.javaClass.getDeclaredField("pendingFocusChannelId").apply { isAccessible = true }.set(host, streamId)
+                context.javaClass.getDeclaredField("pendingFocusChannelId").apply { isAccessible = true }.set(context, streamId)
             }
-
             preservePlaybackForFullscreenReturn()
-            host.startActivity(Intent(host, PlayerActivity::class.java))
+            context.startActivity(Intent(context, PlayerActivity::class.java))
         } catch (_: Exception) {
-            // If reflection cannot resolve the EPG host, keep normal preview playback.
+            // Keep the preview running if the EPG host cannot be resolved.
         }
     }
 
@@ -279,15 +265,12 @@ object PlayerManager {
         val activity = ownerActivity ?: return
         if (!activity.javaClass.name.endsWith("features.live.activity.ChannelListActivity")) return
         if (currentUrl.isNullOrBlank() || exoPlayer == null) return
-
         if (liveRecoveryStartedAtMs == 0L) {
             liveRecoveryStartedAtMs = System.currentTimeMillis()
             liveRecoveryAttempt = 0
         }
-
         val elapsed = System.currentTimeMillis() - liveRecoveryStartedAtMs
         if (elapsed >= LIVE_RECOVERY_WINDOW_MS) return
-
         liveRecoveryAttempt++
         val remaining = LIVE_RECOVERY_WINDOW_MS - elapsed
         val retryDelay = when (liveRecoveryAttempt) {
@@ -296,28 +279,22 @@ object PlayerManager {
             3 -> 5_000L
             else -> 7_000L
         }.coerceAtMost(remaining)
-
         liveRecoveryJob?.cancel()
         val failedPlayer = exoPlayer
         val failedUrl = currentUrl
         liveRecoveryJob = CoroutineScope(Dispatchers.Main.immediate).launch {
             delay(retryDelay)
-
             if (ownerActivity !== activity) return@launch
             if (exoPlayer !== failedPlayer) return@launch
             if (currentUrl != failedUrl) return@launch
             if (currentUrl.isNullOrBlank()) return@launch
-
             val nowElapsed = System.currentTimeMillis() - liveRecoveryStartedAtMs
             if (nowElapsed >= LIVE_RECOVERY_WINDOW_MS) return@launch
-
             try {
                 val player = exoPlayer ?: return@launch
                 player.prepare()
                 player.play()
-            } catch (_: Exception) {
-                // A subsequent ExoPlayer error will schedule the next recovery attempt.
-            }
+            } catch (_: Exception) { }
         }
     }
 
@@ -330,22 +307,14 @@ object PlayerManager {
 
     fun isPlaying(): Boolean = exoPlayer?.isPlaying ?: false
     fun getCurrentUrl(): String? = currentUrl
-
-    fun moveTo(context: Context, playerView: PlayerView) {
-        attach(context, playerView)
-    }
-
+    fun moveTo(context: Context, playerView: PlayerView) { attach(context, playerView) }
     fun getExoPlayerOrNull(): ExoPlayer? = exoPlayer
     fun getCurrentUrlOrEmpty(): String = currentUrl ?: ""
     fun getRebufferCount(): Int = rebufferCount
 
-    fun getTotalBufferingMs(): Long {
-        return if (bufferingStartedAtMs > 0L) {
-            totalBufferingMs + (System.currentTimeMillis() - bufferingStartedAtMs)
-        } else {
-            totalBufferingMs
-        }
-    }
+    fun getTotalBufferingMs(): Long = if (bufferingStartedAtMs > 0L) {
+        totalBufferingMs + (System.currentTimeMillis() - bufferingStartedAtMs)
+    } else totalBufferingMs
 
     fun getLastError(): PlaybackException? = lastError
 
