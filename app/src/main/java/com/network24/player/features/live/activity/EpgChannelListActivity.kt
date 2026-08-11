@@ -307,8 +307,8 @@ class EpgChannelListActivity : BaseActivity() {
         panel.tag = channel.stream_id
         channelFocusViews.add(panel)
         binding.channelContainer.addView(panel, LinearLayout.LayoutParams(dp(channelWidthDp - 5), dp(rowHeightDp - 10)).apply {
-            topMargin = dp(5)
-            bottomMargin = dp(5)
+            topMargin = dp(3)
+            bottomMargin = dp(3)
             marginEnd = dp(5)
         })
     }
@@ -402,16 +402,16 @@ class EpgChannelListActivity : BaseActivity() {
         }
         parent.addView(card, LinearLayout.LayoutParams(cardWidth, dp(rowHeightDp - 10)).apply {
             marginEnd = cardGap
-            topMargin = dp(5)
-            bottomMargin = dp(5)
+            topMargin = dp(3)
+            bottomMargin = dp(3)
         })
     }
 
     private fun addEmptyBlock(parent: LinearLayout, durationMs: Long) {
         val minutes = (durationMs / 60_000L).coerceAtLeast(5L)
         parent.addView(View(this), LinearLayout.LayoutParams((minutes * minuteWidthDp).toInt().coerceAtLeast(dp(18)), dp(rowHeightDp - 10)).apply {
-            topMargin = dp(5)
-            bottomMargin = dp(5)
+            topMargin = dp(3)
+            bottomMargin = dp(3)
         })
     }
 
@@ -460,8 +460,8 @@ class EpgChannelListActivity : BaseActivity() {
         }
         parent.addView(card, LinearLayout.LayoutParams(cardWidth, dp(rowHeightDp - 10)).apply {
             marginEnd = cardGap
-            topMargin = dp(5)
-            bottomMargin = dp(5)
+            topMargin = dp(3)
+            bottomMargin = dp(3)
         })
         return card
     }
