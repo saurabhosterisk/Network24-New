@@ -73,7 +73,7 @@
                 android:background="@android:color/black"
                 app:use_controller="true"
                 app:show_buffering="when_playing"
-                app:layout_constraintWidth_percent="0.40"
+                app:layout_constraintWidth_percent="0.30"
                 app:layout_constraintTop_toTopOf="parent"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintStart_toStartOf="parent" />
