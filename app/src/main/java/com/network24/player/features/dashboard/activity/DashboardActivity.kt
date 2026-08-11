@@ -34,7 +34,6 @@ import com.network24.player.features.live.repository.LiveRepository
 import com.network24.player.features.live.repository.SyncCallback
 import com.network24.player.features.login.activity.LoginActivity
 import com.network24.player.features.settings.activity.SettingsActivity
-import com.network24.player.features.live.activity.EpgChannelListActivity
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.MultiFormatWriter
 import com.google.zxing.common.BitMatrix
@@ -72,18 +71,13 @@ class DashboardActivity : BaseActivity() {
     }
     private fun enlargeDashboardIcons(card: ViewGroup, sizeDp: Int) { val sizePx = (sizeDp * resources.displayMetrics.density).toInt(); for (index in 0 until card.childCount) when (val child = card.getChildAt(index)) { is ImageView -> { child.layoutParams = child.layoutParams.apply { width = sizePx; height = sizePx }; child.scaleType = ImageView.ScaleType.CENTER_INSIDE; child.requestLayout() }; is ViewGroup -> enlargeDashboardIcons(child, sizeDp) } }
     private fun setupDrawerAndMenu() { binding.btnMore.setOnClickListener { openRightDrawer(binding.drawerLayout) }; setupOptionalRightDrawerMenu(binding.drawerLayout, binding.rightNav) { itemId -> when (itemId) { R.id.action_home -> { closeRightDrawer(binding.drawerLayout); true }; R.id.action_refresh_all -> { syncInitialData(true); true }; R.id.action_refresh_guide -> { refreshTvGuide(); true }; R.id.action_settings -> { startActivity(Intent(this, SettingsActivity::class.java)); true }; R.id.action_logout -> { prefs.clear(); startActivity(Intent(this, LoginActivity::class.java)); finishAffinity(); true }; else -> false } }; binding.drawerLayout.addDrawerListener(object : DrawerLayout.SimpleDrawerListener() { override fun onDrawerOpened(drawerView: View) { if (drawerView.id == binding.rightNav.id) binding.rightNav.post { val menuView = binding.rightNav.getChildAt(0) as? NavigationMenuView; if (menuView != null) for (i in 0 until menuView.childCount) { val child = menuView.getChildAt(i); if (child.isFocusable) { child.requestFocus(); break } } } } }) }
+
     private fun setClickListeners() {
         binding.cardLiveTv.setOnClickListener { startActivity(Intent(this, LiveCategoryActivity::class.java)) }
         binding.cardFavorites.setOnClickListener { startActivity(Intent(this, FavoriteChannelsActivity::class.java)) }
-        val moviesCardContent = binding.cardNotification.getChildAt(0) as? LinearLayout
-        (moviesCardContent?.getChildAt(1) as? TextView)?.text = "Movies & VOD"
-        (moviesCardContent?.getChildAt(0) as? ImageView)?.setImageResource(android.R.drawable.ic_menu_slideshow)
         binding.cardNotification.setOnClickListener { openCinemaPro3() }
-        val supportContent = binding.cardSupport.getChildAt(0) as? LinearLayout; (supportContent?.getChildAt(0) as? ImageView)?.setImageResource(R.drawable.ic_live_chat); (supportContent?.getChildAt(1) as? TextView)?.text = "Live Chat"; binding.cardSupport.setOnClickListener { startActivity(Intent(this, ChatHubActivity::class.java)) }
+        binding.cardSupport.setOnClickListener { startActivity(Intent(this, ChatHubActivity::class.java)) }
         binding.cardSettings.setOnClickListener { startActivity(Intent(this, SettingsActivity::class.java)) }
-        val epgCardContent = binding.cardLiveEvents.getChildAt(0) as? LinearLayout
-        (epgCardContent?.getChildAt(1) as? TextView)?.text = "Live With EPG"
-        (epgCardContent?.getChildAt(0) as? ImageView)?.setImageResource(android.R.drawable.ic_menu_agenda)
         binding.cardLiveEvents.setOnClickListener { startActivity(Intent(this, LiveCategoryActivity::class.java).apply { putExtra("epg_mode", true) }) }
         binding.btnRenew.setOnClickListener { showRenewPaymentQr() }
     }
