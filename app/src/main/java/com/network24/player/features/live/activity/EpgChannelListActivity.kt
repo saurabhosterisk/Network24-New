@@ -47,7 +47,7 @@ class EpgChannelListActivity : BaseActivity() {
     private var channelWidthDp = 220
     private val minuteWidthDp = 9.0f
     private val rowHeightDp = 70
-    private val headerHeightDp = 38
+    private val headerHeightDp = 40
     private var timelineStart = 0L
     private var timelineEnd = 0L
     private var syncingVertical = false
@@ -277,24 +277,28 @@ class EpgChannelListActivity : BaseActivity() {
 
     private fun renderTimelineHeader() {
         val totalMinutes = ((timelineEnd - timelineStart) / 60_000L).coerceAtLeast(30L)
-        val timeline = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        val timeline = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setBackgroundColor(Color.rgb(33, 30, 58))
+        }
         val time = Calendar.getInstance().apply { timeInMillis = timelineStart }
         var elapsed = 0L
         while (elapsed < totalMinutes) {
             val label = TextView(this).apply {
                 text = SimpleDateFormat("h:mm a", Locale.getDefault()).format(time.time)
                 gravity = Gravity.CENTER
-                setTextColor(Color.rgb(190, 195, 255))
+                setTextColor(Color.rgb(213, 208, 255))
                 textSize = 13f
                 setTypeface(typeface, android.graphics.Typeface.BOLD)
                 setPadding(dp(4), 0, dp(4), 0)
-                background = roundedBackground(false, false)
+                background = null
             }
             timeline.addView(label, LinearLayout.LayoutParams((30L * minuteWidthDp).toInt(), dp(headerHeightDp)))
             time.add(Calendar.MINUTE, 30)
             elapsed += 30L
         }
-        binding.epgHeaderContainer.addView(timeline)
+        binding.epgHeaderContainer.addView(timeline, LinearLayout.LayoutParams(-2, dp(headerHeightDp)))
     }
 
     private fun addStickyChannel(channel: LiveChannel, index: Int) {
@@ -448,7 +452,10 @@ class EpgChannelListActivity : BaseActivity() {
         if (isNow && stop > start) {
             val progress = ((now - start).toFloat() / (stop - start).toFloat()).coerceIn(0f, 1f)
             val progressWidth = (cardWidth * progress).toInt().coerceAtLeast(dp(3))
-            val progressLine = View(this).apply { setBackgroundColor(Color.WHITE); isFocusable = false }
+            val progressLine = View(this).apply {
+                setBackgroundColor(Color.WHITE)
+                isFocusable = false
+            }
             card.addView(progressLine, FrameLayout.LayoutParams(progressWidth, dp(3), Gravity.BOTTOM or Gravity.START))
         }
         parent.addView(card, LinearLayout.LayoutParams(cardWidth, dp(rowHeightDp - 10)).apply {
@@ -508,17 +515,15 @@ class EpgChannelListActivity : BaseActivity() {
                 }
             }
         }
-        for (rowIndex in programFocusRows.indices) {
-            programFocusRows[rowIndex].forEach { programView ->
-                val parts = programView.tag?.toString()?.split("|") ?: emptyList()
-                val start = parts.getOrNull(1)?.toLongOrNull() ?: 0L
-                val stop = parts.getOrNull(2)?.toLongOrNull() ?: start
-                val center = (start + stop) / 2L
-                val up = nearestProgramInRow(rowIndex - 1, center)
-                val down = nearestProgramInRow(rowIndex + 1, center)
-                programView.nextFocusUpId = up?.id ?: channelFocusViews.getOrNull(rowIndex)?.id ?: programView.id
-                programView.nextFocusDownId = down?.id ?: channelFocusViews.getOrNull(rowIndex)?.id ?: programView.id
-            }
+        for (rowIndex in programFocusRows.indices) programFocusRows[rowIndex].forEach { programView ->
+            val parts = programView.tag?.toString()?.split("|") ?: emptyList()
+            val start = parts.getOrNull(1)?.toLongOrNull() ?: 0L
+            val stop = parts.getOrNull(2)?.toLongOrNull() ?: start
+            val center = (start + stop) / 2L
+            val up = nearestProgramInRow(rowIndex - 1, center)
+            val down = nearestProgramInRow(rowIndex + 1, center)
+            programView.nextFocusUpId = up?.id ?: channelFocusViews.getOrNull(rowIndex)?.id ?: programView.id
+            programView.nextFocusDownId = down?.id ?: channelFocusViews.getOrNull(rowIndex)?.id ?: programView.id
         }
     }
 
@@ -539,9 +544,7 @@ class EpgChannelListActivity : BaseActivity() {
         binding.channelVerticalScroll.post {
             val channelView = channelFocusViews.getOrNull(channelIndex)
             val programKey = pendingFocusProgramKey
-            val target = if (!programKey.isNullOrBlank()) {
-                programFocusRows.getOrNull(channelIndex)?.firstOrNull { it.tag?.toString() == programKey }
-            } else null
+            val target = if (!programKey.isNullOrBlank()) programFocusRows.getOrNull(channelIndex)?.firstOrNull { it.tag?.toString() == programKey } else null
             val focusTarget = target ?: channelView
             if (focusTarget != null) {
                 val scrollY = binding.epgVerticalScroll.scrollY
