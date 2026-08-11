@@ -28,7 +28,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Calendar
-import java.util.Date
 import java.util.Locale
 
 class EpgChannelListActivity : BaseActivity() {
@@ -150,8 +149,6 @@ class EpgChannelListActivity : BaseActivity() {
         binding.gridContainer.removeAllViews()
         val dayStart = startOfDay(selectedDay)
         val dayEnd = dayStart + 24L * 60L * 60L * 1000L
-        // Keep a small amount of the current half-hour visible so the NOW line
-        // can sit inside the currently playing program, like a real TV guide.
         val timelineStart = if (selectedDay == 0) floorToHalfHour(System.currentTimeMillis()) else dayStart
         addTimelineHeader(timelineStart, dayStart, dayEnd)
         channels.forEachIndexed { index, channel -> addChannelRow(channel, index, timelineStart, dayEnd) }
@@ -287,13 +284,12 @@ class EpgChannelListActivity : BaseActivity() {
             setTextColor(Color.WHITE)
             textSize = if (isNow) 15f else 14f
             setPadding(dp(10), dp(4), dp(10), dp(7))
-            maxLines = 2
+            maxLines = 1
+            isSingleLine = true
             ellipsize = android.text.TextUtils.TruncateAt.END
         }
         card.addView(text, FrameLayout.LayoutParams(-1, -1))
 
-        // Progress indicator for the currently running programme. The filled
-        // line represents how much of the programme has already elapsed.
         if (isNow && stop > start) {
             val progress = ((now - start).toFloat() / (stop - start).toFloat()).coerceIn(0f, 1f)
             val progressWidth = (cardWidth * progress).toInt().coerceAtLeast(dp(3))
