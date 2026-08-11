@@ -68,18 +68,6 @@
                     android:textColor="#9B96C8"
                     android:textSize="11sp" />
             </LinearLayout>
-            <TextView
-                android:id="@+id/txtNowPlaying"
-                android:layout_width="wrap_content"
-                android:layout_height="32dp"
-                android:gravity="center"
-                android:paddingStart="12dp"
-                android:paddingEnd="12dp"
-                android:text=""
-                android:textColor="#D8D2FF"
-                android:textSize="11sp"
-                android:textStyle="bold"
-                android:background="#292546" />
             <ImageButton
                 android:id="@+id/btnMore"
                 android:layout_width="42dp"
