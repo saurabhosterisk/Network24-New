@@ -450,10 +450,7 @@ class EpgChannelListActivity : BaseActivity() {
         if (isNow && stop > start) {
             val progress = ((now - start).toFloat() / (stop - start).toFloat()).coerceIn(0f, 1f)
             val progressWidth = (cardWidth * progress).toInt().coerceAtLeast(dp(3))
-            val progressLine = View(this).apply {
-                setBackgroundColor(Color.WHITE)
-                isFocusable = false
-            }
+            val progressLine = View(this).apply { setBackgroundColor(Color.WHITE); isFocusable = false }
             card.addView(progressLine, FrameLayout.LayoutParams(progressWidth, dp(3), Gravity.BOTTOM or Gravity.START))
         }
         parent.addView(card, LinearLayout.LayoutParams(cardWidth, dp(rowHeightDp - 6)).apply {
@@ -600,30 +597,43 @@ class EpgChannelListActivity : BaseActivity() {
     private fun roundedBackground(active: Boolean, strong: Boolean): GradientDrawable {
         val bg = if (strong) Color.rgb(42, 34, 88) else if (active) Color.rgb(34, 32, 68) else Color.rgb(18, 18, 45)
         val stroke = if (strong) Color.rgb(255, 193, 7) else if (active) Color.rgb(120, 130, 255) else Color.rgb(55, 58, 100)
-        return GradientDrawable().apply {
-            cornerRadius = dp(6).toFloat()
-            setColor(bg)
-            setStroke(dp(if (strong) 3 else 2), stroke)
-        }
+        return GradientDrawable().apply { cornerRadius = dp(6).toFloat(); setColor(bg); setStroke(dp(if (strong) 3 else 2), stroke) }
     }
 
     private fun startOfDay(offset: Int): Long = Calendar.getInstance().apply {
-        set(Calendar.HOUR_OF_DAY, 0)
-        set(Calendar.MINUTE, 0)
-        set(Calendar.SECOND, 0)
-        set(Calendar.MILLISECOND, 0)
-        add(Calendar.DAY_OF_YEAR, offset)
+        set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0); add(Calendar.DAY_OF_YEAR, offset)
     }.timeInMillis
 
     private fun floorToHalfHour(timestamp: Long): Long {
         val cal = Calendar.getInstance().apply { timeInMillis = timestamp }
-        cal.set(Calendar.SECOND, 0)
-        cal.set(Calendar.MILLISECOND, 0)
-        cal.set(Calendar.MINUTE, if (cal.get(Calendar.MINUTE) < 30) 0 else 30)
+        cal.set(Calendar.SECOND, 0); cal.set(Calendar.MILLISECOND, 0); cal.set(Calendar.MINUTE, if (cal.get(Calendar.MINUTE) < 30) 0 else 30)
         return cal.timeInMillis
     }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
+
+    override fun onResume() {
+        super.onResume()
+        // Sync the EPG selection with the channel actually playing in fullscreen.
+        // Live TV uses the same PlayerState independently; no Live TV code is changed.
+        val playingChannel = com.network24.player.features.player.state.PlayerState.currentChannel()
+        val streamId = playingChannel?.stream_id
+        if (streamId != null) {
+            val localChannel = channels.firstOrNull { it.stream_id == streamId }
+            if (localChannel != null) {
+                selectedChannel = localChannel
+                pendingFocusChannelId = streamId
+                pendingFocusProgramKey = null
+                updateTopInfo(localChannel)
+                channelFocusViews.forEachIndexed { index, view ->
+                    channels.getOrNull(index)?.let { rowChannel ->
+                        view.background = channelBackground(rowChannel, view.hasFocus())
+                    }
+                }
+                binding.epgArea.post { restorePendingFocus() }
+            }
+        }
+    }
 
     override fun onDestroy() {
         nowHandler.removeCallbacks(nowLineRunnable)
