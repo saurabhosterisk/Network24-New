@@ -139,15 +139,13 @@ class EpgChannelListActivity : BaseActivity() {
             val targetPx = (playerWidthPx * 0.30f).toInt()
             channelWidthDp = (targetPx / density).toInt().coerceAtLeast(220)
             binding.stickyDate.layoutParams = binding.stickyDate.layoutParams.apply { width = targetPx }
-            binding.epgHeaderScroll.layoutParams = binding.epgHeaderScroll.layoutParams.apply {
+            binding.epgHeaderScroll.layoutParams = (binding.epgHeaderScroll.layoutParams as ViewGroup.MarginLayoutParams).apply {
                 width = (binding.epgArea.width - targetPx).coerceAtLeast(0)
-                (this as? ViewGroup.MarginLayoutParams)?.marginStart = targetPx
+                marginStart = targetPx
             }
             binding.channelVerticalScroll.layoutParams = binding.channelVerticalScroll.layoutParams.apply { width = targetPx }
             binding.channelVerticalScroll.getChildAt(0)?.layoutParams?.width = targetPx
-            binding.epgHorizontalScroll.layoutParams = binding.epgHorizontalScroll.layoutParams.apply {
-                (this as? ViewGroup.MarginLayoutParams)?.marginStart = targetPx
-            }
+            binding.epgHorizontalScroll.layoutParams = (binding.epgHorizontalScroll.layoutParams as ViewGroup.MarginLayoutParams).apply { marginStart = targetPx }
             binding.epgArea.requestLayout()
             if (channels.isNotEmpty()) renderGrid(preserveScroll = true)
         }
@@ -384,15 +382,19 @@ class EpgChannelListActivity : BaseActivity() {
             ellipsize = android.text.TextUtils.TruncateAt.END
             background = roundedBackground(false, false)
         }
-        parent.addView(card, LinearLayout.LayoutParams(cardWidth, dp(rowHeightDp - 6)).apply {
+        parent.addView(card, LinearLayout.LayoutParams(cardWidth, dp(rowHeightDp - 10)).apply {
             marginEnd = cardGap
-            bottomMargin = dp(6)
+            topMargin = dp(5)
+            bottomMargin = dp(5)
         })
     }
 
     private fun addEmptyBlock(parent: LinearLayout, durationMs: Long) {
         val minutes = (durationMs / 60_000L).coerceAtLeast(5L)
-        parent.addView(View(this), LinearLayout.LayoutParams((minutes * minuteWidthDp).toInt().coerceAtLeast(dp(18)), dp(rowHeightDp)))
+        parent.addView(View(this), LinearLayout.LayoutParams((minutes * minuteWidthDp).toInt().coerceAtLeast(dp(18)), dp(rowHeightDp - 10)).apply {
+            topMargin = dp(5)
+            bottomMargin = dp(5)
+        })
     }
 
     private fun addProgramBlock(parent: LinearLayout, channel: LiveChannel, program: EpgEntity, durationMs: Long): View {
@@ -402,7 +404,8 @@ class EpgChannelListActivity : BaseActivity() {
         val isNow = start <= now && stop > now
         val title = program.title?.takeIf { it.isNotBlank() } ?: "No Program Info"
         val minutes = (durationMs / 60_000L).coerceAtLeast(5L)
-        val cardWidth = (minutes * minuteWidthDp).toInt().coerceAtLeast(dp(55))
+        val cardGap = dp(6)
+        val cardWidth = ((minutes * minuteWidthDp).toInt() - cardGap).coerceAtLeast(dp(55))
         val card = FrameLayout(this).apply {
             id = View.generateViewId()
             tag = "${channel.stream_id}|${start}|${stop}"
@@ -434,9 +437,10 @@ class EpgChannelListActivity : BaseActivity() {
             val progressLine = View(this).apply { setBackgroundColor(Color.WHITE); isFocusable = false }
             card.addView(progressLine, FrameLayout.LayoutParams(progressWidth, dp(3), Gravity.BOTTOM or Gravity.START))
         }
-        parent.addView(card, LinearLayout.LayoutParams(cardWidth, dp(rowHeightDp - 6)).apply {
-            marginEnd = dp(6)
-            bottomMargin = dp(6)
+        parent.addView(card, LinearLayout.LayoutParams(cardWidth, dp(rowHeightDp - 10)).apply {
+            marginEnd = cardGap
+            topMargin = dp(5)
+            bottomMargin = dp(5)
         })
         return card
     }
@@ -473,9 +477,6 @@ class EpgChannelListActivity : BaseActivity() {
         selectedChannel = channel
         updateTopInfo(channel, program)
         PlayerManager.play(this, binding.playerView, url)
-
-        // Do not rebuild the grid after OK/click. Rebuilding destroys the focused
-        // View and Android TV may move focus to the header/player.
         channelFocusViews.forEachIndexed { index, view ->
             channels.getOrNull(index)?.let { rowChannel ->
                 view.background = channelBackground(rowChannel, view.hasFocus())
