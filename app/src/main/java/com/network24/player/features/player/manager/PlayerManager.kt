@@ -1,328 +1,1427 @@
 package com.network24.player.features.player.manager
 
+
 import android.app.Activity
 import android.app.Application
 import android.content.Context
 import android.content.Intent
-import androidx.annotation.OptIn
+
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
+
 import com.network24.player.core.net.StreamDataSourceFactory
 import com.network24.player.features.live.models.LiveChannel
-import com.network24.player.features.player.activity.PlayerActivity
 import com.network24.player.features.player.state.PlayerState
+
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+import java.lang.ref.WeakReference
+
+
+
 @OptIn(UnstableApi::class)
 object PlayerManager {
+
+
+
     private var exoPlayer: ExoPlayer? = null
+
+
     private var currentUrl: String? = null
+
+
     private var lastStreamUrl: String? = null
+
+
     private var currentPlayerView: PlayerView? = null
-    private var ownerActivity: Activity? = null
-    private var lifecycleCallbacksRegistered = false
-    private var preservePlaybackThroughFullscreenReturn = false
-    private var rebufferCount = 0
-    private var bufferingStartedAtMs = 0L
-    private var totalBufferingMs = 0L
-    private var lastError: PlaybackException? = null
-    private var lastPlaybackState = Player.STATE_IDLE
-    private var liveRecoveryJob: Job? = null
-    private var liveRecoveryStartedAtMs = 0L
-    private var liveRecoveryAttempt = 0
-    private const val LIVE_RECOVERY_WINDOW_MS = 30_000L
 
-    private val loadControl = DefaultLoadControl.Builder()
-        .setBufferDurationsMs(20_000, 60_000, 3_000, 6_000)
-        .build()
 
-    private fun ensureActivityLifecycleCallbacks(context: Context) {
-        if (lifecycleCallbacksRegistered) return
-        val application = context.applicationContext as? Application ?: return
-        application.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
-            override fun onActivityCreated(activity: Activity, savedInstanceState: android.os.Bundle?) = Unit
-            override fun onActivityStarted(activity: Activity) = Unit
-            override fun onActivityResumed(activity: Activity) {
-                if (activity.javaClass.name.endsWith("features.live.activity.EpgChannelListActivity") && !currentUrl.isNullOrBlank()) {
-                    runCatching {
-                        val bindingField = activity.javaClass.getDeclaredField("binding").apply { isAccessible = true }
-                        val binding = bindingField.get(activity)
-                        val playerView = binding.javaClass.getDeclaredField("playerView").apply { isAccessible = true }.get(binding) as? PlayerView
-                        if (playerView != null) {
-                            attach(activity, playerView)
-                            playerView.post { exoPlayer?.play() }
+
+
+    /**
+     * WeakReference prevents Activity memory leak
+     */
+    private var ownerActivityRef:
+            WeakReference<Activity>? = null
+
+
+
+
+
+    private var lifecycleCallbacksRegistered =
+        false
+
+
+
+
+    private var preservePlaybackThroughFullscreenReturn =
+        false
+
+
+
+
+
+    // Diagnostics
+
+    private var rebufferCount =
+        0
+
+
+    private var bufferingStartedAtMs =
+        0L
+
+
+    private var totalBufferingMs =
+        0L
+
+
+    private var lastError:
+            PlaybackException? = null
+
+
+    private var lastPlaybackState =
+        Player.STATE_IDLE
+
+
+
+
+
+
+    // Recovery
+
+    private var liveRecoveryJob:
+            Job? = null
+
+
+    private var liveRecoveryStartedAtMs =
+        0L
+
+
+    private var liveRecoveryAttempt =
+        0
+
+
+
+
+
+    private val recoveryFailedListeners =
+        mutableSetOf<() -> Unit>()
+
+
+
+
+
+    private val playerScope =
+        CoroutineScope(
+            SupervisorJob()
+                    +
+                    Dispatchers.Main.immediate
+        )
+
+
+
+
+
+    private const val LIVE_RECOVERY_WINDOW_MS =
+        30000L
+
+
+
+
+
+    private val loadControl =
+
+        DefaultLoadControl.Builder()
+
+            .setBufferDurationsMs(
+                20000,
+                60000,
+                3000,
+                6000
+            )
+
+            .build()
+
+
+
+
+
+
+
+    private fun ensureActivityLifecycleCallbacks(
+        context: Context
+    ) {
+
+
+        if (
+            lifecycleCallbacksRegistered
+        ) return
+
+
+
+
+        val application =
+            context.applicationContext
+                    as? Application
+                ?: return
+
+
+
+
+
+        application.registerActivityLifecycleCallbacks(
+
+            object :
+                Application.ActivityLifecycleCallbacks {
+
+
+
+                override fun onActivityCreated(
+                    activity: Activity,
+                    savedInstanceState: android.os.Bundle?
+                ) = Unit
+
+
+
+
+
+
+                override fun onActivityStarted(
+                    activity: Activity
+                ) = Unit
+
+
+
+
+
+
+                override fun onActivityResumed(
+                    activity: Activity
+                ) {
+
+
+                    if (
+
+                        activity.javaClass.name.endsWith(
+                            "features.live.activity.EpgChannelListActivity"
+                        )
+
+                        &&
+
+                        !currentUrl.isNullOrBlank()
+
+                    ) {
+
+
+                        runCatching {
+
+
+                            attachFromEpgReflection(
+                                activity
+                            )
+
                         }
                     }
                 }
-            }
-            override fun onActivityPaused(activity: Activity) = Unit
-            override fun onActivitySaveInstanceState(activity: Activity, outState: android.os.Bundle) = Unit
-            override fun onActivityDestroyed(activity: Activity) = Unit
-            override fun onActivityStopped(activity: Activity) {
-                if (activity.javaClass.name.endsWith("features.player.activity.PlayerActivity") && ownerActivity !== activity) {
-                    restoreEpgHostFocus(ownerActivity)
-                    return
+
+
+
+
+
+
+                override fun onActivityPaused(
+                    activity: Activity
+                ) = Unit
+
+
+
+
+
+
+                override fun onActivitySaveInstanceState(
+                    activity: Activity,
+                    outState: android.os.Bundle
+                ) = Unit
+
+
+
+
+
+
+                override fun onActivityStopped(
+                    activity: Activity
+                ) {
+
+
+                    val owner =
+                        ownerActivityRef
+                            ?.get()
+
+
+
+                    if (
+                        owner === activity
+                    ) {
+
+
+                        cancelLiveRecovery()
+
+
+                        release()
+
+
+                        ownerActivityRef =
+                            null
+                    }
                 }
-                if (ownerActivity === activity) {
-                    cancelLiveRecovery()
-                    release()
-                    ownerActivity = null
-                }
+
+
+
+
+
+
+                override fun onActivityDestroyed(
+                    activity: Activity
+                ) = Unit
             }
-        })
-        lifecycleCallbacksRegistered = true
+        )
+
+
+
+        lifecycleCallbacksRegistered =
+            true
     }
 
-    private fun restoreEpgHostFocus(host: Activity?) {
-        val epgHost = host ?: return
-        if (!epgHost.javaClass.name.endsWith("features.live.activity.EpgChannelListActivity")) return
-        epgHost.window.decorView.postDelayed({
-            runCatching {
-                val restore = epgHost.javaClass.getDeclaredMethod("restorePendingFocus").apply { isAccessible = true }
-                restore.invoke(epgHost)
-            }
-        }, 120L)
-    }
+    private fun attachFromEpgReflection(
+        activity: Activity
+    ) {
 
-    fun getPlayer(context: Context): ExoPlayer {
-        if (exoPlayer == null) {
-            val player = ExoPlayer.Builder(
-                context.applicationContext,
-                StreamDataSourceFactory.createRenderersFactory(context)
+
+        try {
+
+
+            val bindingField =
+                activity.javaClass
+                    .getDeclaredField(
+                        "binding"
+                    )
+                    .apply {
+                        isAccessible = true
+                    }
+
+
+
+            val binding =
+                bindingField.get(
+                    activity
+                )
+
+
+
+            val playerField =
+                binding.javaClass
+                    .getDeclaredField(
+                        "playerView"
+                    )
+                    .apply {
+                        isAccessible = true
+                    }
+
+
+
+
+            val playerView =
+                playerField.get(
+                    binding
+                )
+                        as? PlayerView
+                    ?: return
+
+
+
+
+            attach(
+                activity,
+                playerView
             )
-                .setLoadControl(loadControl)
-                .setMediaSourceFactory(StreamDataSourceFactory.createMediaSourceFactory())
-                .build()
-                .apply {
-                    playWhenReady = true
-                    trackSelectionParameters = trackSelectionParameters.buildUpon()
-                        .setSelectUndeterminedTextLanguage(true)
-                        .build()
-                    addListener(object : Player.Listener {
-                        override fun onPlaybackStateChanged(playbackState: Int) {
-                            val wasBuffering = lastPlaybackState == Player.STATE_BUFFERING
-                            if (playbackState == Player.STATE_BUFFERING && !wasBuffering) {
-                                rebufferCount++
-                                bufferingStartedAtMs = System.currentTimeMillis()
-                            } else if (wasBuffering && playbackState != Player.STATE_BUFFERING) {
-                                if (bufferingStartedAtMs > 0L) {
-                                    totalBufferingMs += System.currentTimeMillis() - bufferingStartedAtMs
-                                    bufferingStartedAtMs = 0L
+
+
+
+        } catch (_: Exception) {
+
+
+        }
+    }
+
+
+
+
+
+
+
+
+
+    fun getPlayer(
+        context: Context
+    ): ExoPlayer {
+
+
+        if (
+            exoPlayer == null
+        ) {
+
+
+            exoPlayer =
+
+                ExoPlayer.Builder(
+
+                    context.applicationContext,
+
+                    StreamDataSourceFactory
+                        .createRenderersFactory(
+                            context
+                        )
+
+                )
+
+                    .setMediaSourceFactory(
+                        StreamDataSourceFactory
+                            .createMediaSourceFactory()
+                    )
+
+                    .setLoadControl(
+                        loadControl
+                    )
+
+                    .build()
+
+                    .apply {
+
+
+
+                        playWhenReady =
+                            true
+
+
+
+
+
+                        addListener(
+
+                            object : Player.Listener {
+
+
+
+                                override fun onPlaybackStateChanged(
+                                    playbackState: Int
+                                ) {
+
+
+                                    val wasBuffering =
+                                        lastPlaybackState ==
+                                                Player.STATE_BUFFERING
+
+
+
+
+                                    if (
+
+                                        playbackState ==
+                                        Player.STATE_BUFFERING
+
+                                        &&
+
+                                        !wasBuffering
+
+                                    ) {
+
+
+                                        rebufferCount++
+
+
+
+                                        bufferingStartedAtMs =
+                                            System.currentTimeMillis()
+                                    }
+
+
+
+
+
+                                    else if (
+
+                                        wasBuffering
+
+                                        &&
+
+                                        playbackState !=
+                                        Player.STATE_BUFFERING
+
+                                    ) {
+
+
+
+                                        if (
+                                            bufferingStartedAtMs > 0L
+                                        ) {
+
+
+                                            totalBufferingMs +=
+
+                                                System.currentTimeMillis()
+                                            -
+                                            bufferingStartedAtMs
+
+
+
+                                            bufferingStartedAtMs =
+                                                0L
+                                        }
+                                    }
+
+
+
+
+
+                                    lastPlaybackState =
+                                        playbackState
+                                }
+
+
+
+
+
+
+
+
+
+                                override fun onPlayerError(
+                                    error: PlaybackException
+                                ) {
+
+
+                                    lastError =
+                                        error
+
+
+                                    android.util.Log.e(
+
+                                        "N24_PLAYER_ERROR",
+
+                                        "code=${error.errorCode}, msg=${error.message}"
+
+                                    )
+
+
+                                    playerScope.launch {
+
+
+                                        delay(500)
+
+                                        android.util.Log.e(
+                                            "N24_RECOVERY",
+                                            "start=${liveRecoveryStartedAtMs}, now=${System.currentTimeMillis()}, attempt=$liveRecoveryAttempt"
+                                        )
+
+                                        scheduleLiveChannelRecoveryIfNeeded()
+
+                                    }
                                 }
                             }
-                            lastPlaybackState = playbackState
-                        }
-                        override fun onPlayerError(error: PlaybackException) {
-                            lastError = error
-                            error.printStackTrace()
-                            scheduleLiveChannelRecoveryIfNeeded()
-                        }
-                    })
-                }
-            exoPlayer = player
+                        )
+                    }
+
+
         }
+
+
+
         return exoPlayer!!
     }
 
-    fun attach(context: Context, playerView: PlayerView) {
-        ensureActivityLifecycleCallbacks(context)
-        if (context is Activity) ownerActivity = context
-        val player = getPlayer(context)
-        if (currentPlayerView !== playerView) {
-            currentPlayerView?.player = null
-            playerView.player = player
-            currentPlayerView = playerView
+
+
+    fun attach(
+        context: Context,
+        playerView: PlayerView
+    ) {
+
+
+        ensureActivityLifecycleCallbacks(
+            context
+        )
+
+
+
+        if (
+            context is Activity
+        ) {
+
+
+            ownerActivityRef =
+                WeakReference(
+                    context
+                )
         }
-        if (currentUrl == null && !lastStreamUrl.isNullOrBlank()) {
-            currentUrl = lastStreamUrl
+
+
+
+
+
+        val player =
+            getPlayer(
+                context
+            )
+
+
+
+        if (
+            currentPlayerView !== playerView
+        ) {
+
+
+            currentPlayerView?.player =
+                null
+
+
+
+            playerView.player =
+                player
+
+
+
+            currentPlayerView =
+                playerView
+        }
+    }
+
+
+
+
+
+
+
+
+
+    fun detach(
+        playerView: PlayerView
+    ) {
+
+
+        if (
+            currentPlayerView === playerView
+        ) {
+
+
+            playerView.player =
+                null
+
+
+
+            currentPlayerView =
+                null
+        }
+    }
+
+
+
+
+
+
+
+
+
+    fun moveTo(
+        context: Context,
+        playerView: PlayerView
+    ) {
+
+
+        attach(
+            context,
+            playerView
+        )
+    }
+
+
+
+
+
+
+
+
+
+    fun play(
+        context: Context,
+        playerView: PlayerView,
+        streamUrl: String
+    ) {
+
+
+
+        cancelLiveRecovery()
+
+
+
+
+
+        val player =
+            getPlayer(
+                context
+            )
+
+
+
+        attach(
+            context,
+            playerView
+        )
+
+
+
+
+
+        if (
+            currentUrl != streamUrl
+        ) {
+
+
             resetDiagnostics()
+
+
+
             player.stop()
+
+
+
             player.clearMediaItems()
-            player.setMediaItem(MediaItem.fromUri(lastStreamUrl!!))
+
+
+
+            currentUrl =
+                streamUrl
+
+
+
+            lastStreamUrl =
+                streamUrl
+
+
+
+
+
+            player.setMediaItem(
+
+                MediaItem.fromUri(
+                    streamUrl
+                )
+            )
+
+
+
             player.prepare()
+
+
+
+            player.play()
+        }
+        else {
+
+
             player.play()
         }
     }
 
-    fun detach(playerView: PlayerView) {
-        if (currentPlayerView === playerView) {
-            playerView.player = null
-            currentPlayerView = null
-        }
-    }
 
-    fun play(context: Context, playerView: PlayerView, streamUrl: String) {
-        if (currentUrl == streamUrl && context is Activity && context.javaClass.name.endsWith("features.live.activity.EpgChannelListActivity")) {
-            openEpgFullscreen(context, streamUrl)
-            return
-        }
-        cancelLiveRecovery()
-        if (currentUrl != null && currentUrl != streamUrl) releaseCurrentStreamForSwitch()
-        val player = getPlayer(context)
-        attach(context, playerView)
-        if (currentUrl == streamUrl) {
-            lastStreamUrl = streamUrl
-            if (player.playbackState == Player.STATE_IDLE || player.playbackState == Player.STATE_ENDED) player.prepare()
-            player.play()
-            return
-        }
-        currentUrl = streamUrl
-        lastStreamUrl = streamUrl
-        resetDiagnostics()
-        player.stop()
-        player.clearMediaItems()
-        player.setMediaItem(MediaItem.fromUri(streamUrl))
-        player.prepare()
-        player.play()
-    }
 
-    private fun openEpgFullscreen(context: Activity, streamUrl: String) {
-        try {
-            val channelsField = context.javaClass.getDeclaredField("channels").apply { isAccessible = true }
-            @Suppress("UNCHECKED_CAST")
-            val channels = channelsField.get(context) as? List<LiveChannel> ?: return
-            val streamId = streamUrl.substringAfterLast('/').substringBefore('.').toIntOrNull() ?: return
-            val position = channels.indexOfFirst { it.stream_id == streamId }
-            if (position < 0) return
-            PlayerState.channels.clear()
-            PlayerState.channels.addAll(channels)
-            PlayerState.currentPosition = position
-            runCatching {
-                context.javaClass.getDeclaredField("pendingFocusChannelId").apply { isAccessible = true }.set(context, streamId)
-            }
-            preservePlaybackForFullscreenReturn()
-            context.startActivity(Intent(context, PlayerActivity::class.java))
-        } catch (_: Exception) {
-            // Keep the preview running if the EPG host cannot be resolved.
-        }
-    }
 
-    private fun releaseCurrentStreamForSwitch() {
-        cancelLiveRecovery()
-        currentPlayerView?.player = null
-        currentPlayerView = null
-        exoPlayer?.stop()
-        exoPlayer?.clearMediaItems()
-        exoPlayer?.release()
-        exoPlayer = null
-        currentUrl = null
-        lastStreamUrl = null
-        resetDiagnostics()
-    }
+
+
+
+
 
     fun retryCurrent() {
+
+
         cancelLiveRecovery()
-        val player = exoPlayer ?: return
-        if (currentUrl.isNullOrBlank()) return
+
+
+
+        val player =
+            exoPlayer
+                ?: return
+
+
+
+
+
+        if (
+            currentUrl.isNullOrBlank()
+        ) return
+
+
+
+
+
+        player.stop()
+
+
+
+        player.clearMediaItems()
+
+
+
+        player.setMediaItem(
+
+            MediaItem.fromUri(
+                currentUrl!!
+            )
+        )
+
+
+
         player.prepare()
+
+
+
         player.play()
     }
 
+
+
+
+
+
+
+
+
+    fun stop() {
+
+
+        cancelLiveRecovery()
+
+
+
+        exoPlayer?.stop()
+
+
+
+        exoPlayer?.clearMediaItems()
+
+
+
+        currentUrl =
+            null
+    }
+
+
+
+
+
+
+
+
+
     fun pause() {
-        if (preservePlaybackThroughFullscreenReturn) {
-            preservePlaybackThroughFullscreenReturn = false
-            return
-        }
+
+
         exoPlayer?.pause()
     }
 
-    fun preservePlaybackForFullscreenReturn() {
-        preservePlaybackThroughFullscreenReturn = true
+
+
+
+
+
+
+
+
+    fun resume() {
+
+
+        exoPlayer?.play()
     }
 
-    fun resume() { exoPlayer?.play() }
 
-    fun stop() {
-        cancelLiveRecovery()
-        exoPlayer?.stop()
-        exoPlayer?.clearMediaItems()
-        currentUrl = null
+
+
+
+
+
+
+
+    fun isPlaying(): Boolean {
+
+
+        return exoPlayer?.isPlaying
+            ?: false
     }
 
-    fun release() {
-        cancelLiveRecovery()
-        if (!currentUrl.isNullOrBlank()) lastStreamUrl = currentUrl
-        currentPlayerView?.player = null
-        currentPlayerView = null
-        exoPlayer?.stop()
-        exoPlayer?.clearMediaItems()
-        exoPlayer?.release()
-        exoPlayer = null
-        currentUrl = null
-        resetDiagnostics()
+
+
+
+
+
+
+
+
+    fun getExoPlayerOrNull():
+
+            ExoPlayer? {
+
+
+        return exoPlayer
     }
+
+
 
     private fun scheduleLiveChannelRecoveryIfNeeded() {
-        val activity = ownerActivity ?: return
-        if (!activity.javaClass.name.endsWith("features.live.activity.ChannelListActivity")) return
-        if (currentUrl.isNullOrBlank() || exoPlayer == null) return
-        if (liveRecoveryStartedAtMs == 0L) {
-            liveRecoveryStartedAtMs = System.currentTimeMillis()
-            liveRecoveryAttempt = 0
+
+
+        val activity =
+            ownerActivityRef
+                ?.get()
+                ?: return
+
+
+
+        if (
+            currentUrl.isNullOrBlank()
+            ||
+            exoPlayer == null
+        ) return
+
+
+
+
+        if (
+            liveRecoveryStartedAtMs == 0L
+        ) {
+
+            liveRecoveryStartedAtMs =
+                System.currentTimeMillis()
+
+            liveRecoveryAttempt =
+                0
+
+            android.util.Log.d(
+                "N24_RECOVERY",
+                "Recovery started"
+            )
         }
-        val elapsed = System.currentTimeMillis() - liveRecoveryStartedAtMs
-        if (elapsed >= LIVE_RECOVERY_WINDOW_MS) return
+
+
+
+
+        val elapsed =
+            System.currentTimeMillis()
+        -
+        liveRecoveryStartedAtMs
+
+
+
+
+
+        android.util.Log.d(
+            "N24_RECOVERY",
+            "elapsed=$elapsed attempt=$liveRecoveryAttempt"
+        )
+
+
+
+
+        if (
+            elapsed >= LIVE_RECOVERY_WINDOW_MS
+        ) {
+
+
+            android.util.Log.e(
+                "N24_RECOVERY",
+                "Recovery failed after timeout"
+            )
+
+
+            recoveryFailedListeners.forEach { listener ->
+
+                listener.invoke()
+
+            }
+
+
+            cancelLiveRecovery()
+
+            return
+        }
+
+
+
+
+        if (
+            liveRecoveryJob?.isActive == true
+        ) return
+
+
+
+
+
+        val delayTime =
+            when(liveRecoveryAttempt) {
+
+                0 -> 3000L
+
+                1 -> 5000L
+
+                else -> 7000L
+            }
+
+
+
+
+
         liveRecoveryAttempt++
-        val remaining = LIVE_RECOVERY_WINDOW_MS - elapsed
-        val retryDelay = when (liveRecoveryAttempt) {
-            1 -> 2_000L
-            2 -> 3_000L
-            3 -> 5_000L
-            else -> 7_000L
-        }.coerceAtMost(remaining)
-        liveRecoveryJob?.cancel()
-        val failedPlayer = exoPlayer
-        val failedUrl = currentUrl
-        liveRecoveryJob = CoroutineScope(Dispatchers.Main.immediate).launch {
-            delay(retryDelay)
-            if (ownerActivity !== activity) return@launch
-            if (exoPlayer !== failedPlayer) return@launch
-            if (currentUrl != failedUrl) return@launch
-            if (currentUrl.isNullOrBlank()) return@launch
-            val nowElapsed = System.currentTimeMillis() - liveRecoveryStartedAtMs
-            if (nowElapsed >= LIVE_RECOVERY_WINDOW_MS) return@launch
-            try {
-                val player = exoPlayer ?: return@launch
-                player.prepare()
-                player.play()
-            } catch (_: Exception) { }
-        }
+
+
+
+
+
+        val failedUrl =
+            currentUrl
+
+
+
+
+
+        liveRecoveryJob =
+            playerScope.launch {
+
+
+                delay(delayTime)
+
+
+
+                if (
+                    failedUrl == null
+                ) return@launch
+
+
+
+                android.util.Log.d(
+                    "N24_RECOVERY",
+                    "Retry attempt $liveRecoveryAttempt"
+                )
+
+
+
+                exoPlayer?.apply {
+
+
+                    stop()
+
+
+                    clearMediaItems()
+
+
+
+                    setMediaItem(
+                        MediaItem.fromUri(
+                            failedUrl
+                        )
+                    )
+
+
+                    prepare()
+
+
+                    play()
+                }
+
+
+
+                scheduleLiveChannelRecoveryIfNeeded()
+            }
     }
+
+
+
+
+
+
+
 
     private fun cancelLiveRecovery() {
-        liveRecoveryJob?.cancel()
-        liveRecoveryJob = null
-        liveRecoveryStartedAtMs = 0L
-        liveRecoveryAttempt = 0
+
+
+        liveRecoveryJob
+            ?.cancel()
+
+
+
+        liveRecoveryJob =
+            null
+
+
+
+        liveRecoveryStartedAtMs =
+            0L
+
+
+
+        liveRecoveryAttempt =
+            0
     }
 
-    fun isPlaying(): Boolean = exoPlayer?.isPlaying ?: false
-    fun getCurrentUrl(): String? = currentUrl
-    fun moveTo(context: Context, playerView: PlayerView) { attach(context, playerView) }
-    fun getExoPlayerOrNull(): ExoPlayer? = exoPlayer
-    fun getCurrentUrlOrEmpty(): String = currentUrl ?: ""
-    fun getRebufferCount(): Int = rebufferCount
 
-    fun getTotalBufferingMs(): Long = if (bufferingStartedAtMs > 0L) {
-        totalBufferingMs + (System.currentTimeMillis() - bufferingStartedAtMs)
-    } else totalBufferingMs
 
-    fun getLastError(): PlaybackException? = lastError
+
+
+
+
+
 
     private fun resetDiagnostics() {
-        rebufferCount = 0
-        bufferingStartedAtMs = 0L
-        totalBufferingMs = 0L
-        lastError = null
-        lastPlaybackState = Player.STATE_IDLE
+
+
+        rebufferCount =
+            0
+
+
+
+        bufferingStartedAtMs =
+            0L
+
+
+
+        totalBufferingMs =
+            0L
+
+
+
+        lastError =
+            null
+
+
+
+        lastPlaybackState =
+            Player.STATE_IDLE
     }
+
+
+
+
+
+
+
+
+
+    fun release() {
+
+
+        cancelLiveRecovery()
+
+
+
+        if (
+            !currentUrl.isNullOrBlank()
+        ) {
+
+
+            lastStreamUrl =
+                currentUrl
+        }
+
+
+
+
+
+
+        currentPlayerView?.player =
+            null
+
+
+
+        currentPlayerView =
+            null
+
+
+
+
+
+
+        exoPlayer?.stop()
+
+
+
+        exoPlayer?.clearMediaItems()
+
+
+
+        exoPlayer?.release()
+
+
+
+        exoPlayer =
+            null
+
+
+
+
+
+
+        currentUrl =
+            null
+
+
+
+        resetDiagnostics()
+
+
+
+        ownerActivityRef =
+            null
+    }
+
+
+
+    fun setRecoveryFailedListener(
+        listener: (() -> Unit)?
+    ) {
+
+        if(listener != null) {
+
+            recoveryFailedListeners.add(listener)
+
+        }
+
+    }
+
+
+
+
+
+
+
+
+    fun getCurrentUrl(): String? {
+
+
+        return currentUrl
+    }
+
+
+
+
+
+
+
+
+
+    fun getCurrentUrlOrEmpty(): String {
+
+
+        return currentUrl
+            ?: ""
+    }
+
+
+
+
+
+
+
+
+
+    fun getRebufferCount(): Int {
+
+
+        return rebufferCount
+    }
+
+
+
+
+
+
+
+
+
+    fun getTotalBufferingMs(): Long {
+
+
+        return if (
+
+            bufferingStartedAtMs > 0L
+
+        ) {
+
+
+            totalBufferingMs +
+
+                    (
+
+                            System.currentTimeMillis()
+                                    -
+                                    bufferingStartedAtMs
+
+                            )
+
+        }
+        else {
+
+
+            totalBufferingMs
+        }
+    }
+
+
+
+
+
+
+
+
+
+    fun getLastError(): PlaybackException? {
+
+
+        return lastError
+    }
+
+
+
+
+
+
+
+
+
+    fun getLastErrorMessage(): String {
+
+
+        return lastError
+            ?.message
+            ?: ""
+    }
+
+
+
+
+
+
+
+
+
+    fun preservePlaybackForFullscreenReturn() {
+
+
+        preservePlaybackThroughFullscreenReturn =
+            true
+    }
+
+
+
+
+
+
+
+
+
+    fun shouldPreservePlayback(): Boolean {
+
+
+        return preservePlaybackThroughFullscreenReturn
+    }
+
+
+
+
+
+
+
+
+
+    fun clearFullscreenPreserveFlag() {
+
+
+        preservePlaybackThroughFullscreenReturn =
+            false
+    }
+
+
+
+
+
+
+
+
+
+    fun getLastStreamUrl(): String? {
+
+
+        return lastStreamUrl
+    }
+
+
+
+
+
+
+
+
+
+    fun isRecoveryRunning(): Boolean {
+
+
+        return liveRecoveryJob
+            ?.isActive
+            ?: false
+    }
+
+
+
+
+
+
+
+
+
+    private fun releasePlayerOnly() {
+
+
+        currentPlayerView?.player =
+            null
+
+
+
+        currentPlayerView =
+            null
+
+
+
+        exoPlayer?.stop()
+
+
+
+        exoPlayer?.clearMediaItems()
+
+
+
+        exoPlayer?.release()
+
+
+
+        exoPlayer =
+            null
+    }
+
 }

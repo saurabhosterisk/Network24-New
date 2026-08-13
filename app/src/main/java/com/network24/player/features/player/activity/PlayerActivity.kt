@@ -8,15 +8,18 @@ import android.os.Looper
 import android.view.KeyEvent
 import android.view.View
 import android.widget.Toast
+
 import androidx.activity.addCallback
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
+
 import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.ui.AspectRatioFrameLayout
+
 import com.network24.player.R
 import com.network24.player.core.base.BaseActivity
 import com.network24.player.core.preferences.PreferenceManager
@@ -27,285 +30,1552 @@ import com.network24.player.features.player.manager.PlayerManager
 import com.network24.player.features.player.multiview.MultiViewActivity
 import com.network24.player.features.player.state.PlayerState
 import com.network24.player.features.player.ui.dialogs.StreamInfoDialog
+
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
 import java.text.SimpleDateFormat
 import java.util.Locale
 
+
 class PlayerActivity : BaseActivity() {
+
+
     private lateinit var binding: ActivityPlayerBinding
     private lateinit var prefs: PreferenceManager
     private lateinit var repository: LiveRepository
 
-    private var retryCount = 0
-    private var retryJob: Job? = null
-    private var recoveryStartedAtMs = 0L
+
     private var errorActive = false
     private var hasEverPlayed = false
 
-    private companion object { const val RECOVERY_WINDOW_MS = 30_000L }
 
     private var isSubtitleEnabled = false
     private var currentAspectRatioIndex = 0
-    private val hideHandler = Handler(Looper.getMainLooper())
+
+
+    private val hideHandler =
+        Handler(Looper.getMainLooper())
+
+
     private val hideRunnable = Runnable {
+
         val d = 300L
-        binding.topTint.animate().alpha(0f).setDuration(d).withEndAction { binding.topTint.visibility = View.GONE }.start()
-        binding.txtChannelTitle.animate().alpha(0f).setDuration(d).withEndAction { binding.txtChannelTitle.visibility = View.GONE }.start()
-        binding.bottomOverlay.animate().alpha(0f).translationY(50f).setDuration(d).withEndAction { binding.bottomOverlay.visibility = View.GONE }.start()
+
+
+        binding.topTint
+            .animate()
+            .alpha(0f)
+            .setDuration(d)
+            .withEndAction {
+
+                binding.topTint.visibility =
+                    View.GONE
+            }
+            .start()
+
+
+
+        binding.txtChannelTitle
+            .animate()
+            .alpha(0f)
+            .setDuration(d)
+            .withEndAction {
+
+                binding.txtChannelTitle.visibility =
+                    View.GONE
+            }
+            .start()
+
+
+
+        binding.bottomOverlay
+            .animate()
+            .alpha(0f)
+            .translationY(50f)
+            .setDuration(d)
+            .withEndAction {
+
+                binding.bottomOverlay.visibility =
+                    View.GONE
+            }
+            .start()
     }
 
-    private val playerListener = object : Player.Listener {
-        override fun onPlaybackStateChanged(playbackState: Int) {
-            if (playbackState == Player.STATE_BUFFERING) {
-                binding.progressBar.visibility = View.VISIBLE
-                if (!hasEverPlayed && !errorActive) binding.txtPlayerError.visibility = View.GONE
-                return
+
+
+    private val playerListener =
+        object : Player.Listener {
+
+
+            override fun onPlaybackStateChanged(
+                playbackState: Int
+            ) {
+
+
+                if (playbackState == Player.STATE_BUFFERING) {
+
+
+                    binding.progressBar.visibility =
+                        View.VISIBLE
+
+
+                    if (!hasEverPlayed && !errorActive) {
+
+                        binding.txtPlayerError.visibility =
+                            View.GONE
+                    }
+
+
+                    return
+                }
+
+
+
+                binding.progressBar.visibility =
+                    View.GONE
+
+
+
+                if (playbackState == Player.STATE_READY) {
+
+
+                    hasEverPlayed = true
+
+
+                    errorActive = false
+
+
+                    binding.txtPlayerError.visibility =
+                        View.GONE
+
+
+                    binding.btnReportChannel.visibility =
+                        View.GONE
+                }
             }
-            binding.progressBar.visibility = View.GONE
-            if (playbackState == Player.STATE_READY) {
-                hasEverPlayed = true
-                retryJob?.cancel(); retryJob = null
-                retryCount = 0; recoveryStartedAtMs = 0L; errorActive = false
-                binding.txtPlayerError.visibility = View.GONE
-                binding.btnReportChannel.visibility = View.GONE
+
+
+
+
+            override fun onIsPlayingChanged(
+                isPlaying: Boolean
+            ) {
+
+                binding.btnPlayPause.setImageResource(
+                    if (isPlaying)
+                        R.drawable.ic_pause
+                    else
+                        R.drawable.ic_play
+                )
+            }
+
+
+
+
+            override fun onPlayerError(
+                error: PlaybackException
+            ) {
+
+
+                super.onPlayerError(error)
+
+
+                errorActive = true
+
+
+                binding.progressBar.visibility =
+                    View.VISIBLE
+
+
+                binding.txtPlayerError.text =
+                    "Reconnecting..."
+
+
+                binding.txtPlayerError.visibility =
+                    View.VISIBLE
+
+
+
+                if (hasEverPlayed) {
+
+                    Toast.makeText(
+                        this@PlayerActivity,
+                        "Reconnecting...",
+                        Toast.LENGTH_SHORT
+                    ).show()
+
+                } else {
+
+                    Toast.makeText(
+                        this@PlayerActivity,
+                        "Starting stream...",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
             }
         }
 
-        override fun onIsPlayingChanged(isPlaying: Boolean) {
-            binding.btnPlayPause.setImageResource(if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play)
-        }
+    override fun onCreate(
+        savedInstanceState: Bundle?
+    ) {
 
-        override fun onPlayerError(error: PlaybackException) {
-            super.onPlayerError(error)
-            if (recoveryStartedAtMs == 0L) recoveryStartedAtMs = System.currentTimeMillis()
-            val elapsed = System.currentTimeMillis() - recoveryStartedAtMs
-            if (elapsed >= RECOVERY_WINDOW_MS) { showPermanentPlaybackError(); return }
-
-            retryCount++
-            val remaining = RECOVERY_WINDOW_MS - elapsed
-            val retryDelay = when (retryCount) { 1 -> 2_000L; 2 -> 3_000L; 3 -> 5_000L; 4 -> 7_000L; else -> 8_000L }.coerceAtMost(remaining)
-
-            if (hasEverPlayed) {
-                Toast.makeText(this@PlayerActivity, "Reconnecting...", Toast.LENGTH_SHORT).show()
-            } else {
-                Toast.makeText(this@PlayerActivity, "Starting stream...", Toast.LENGTH_SHORT).show()
-            }
-
-            retryJob?.cancel()
-            retryJob = lifecycleScope.launch(Dispatchers.Main) {
-                delay(retryDelay)
-                if (isFinishing || isDestroyed) return@launch
-                val nowElapsed = System.currentTimeMillis() - recoveryStartedAtMs
-                if (nowElapsed >= RECOVERY_WINDOW_MS) { showPermanentPlaybackError(); return@launch }
-                binding.progressBar.visibility = View.VISIBLE
-                binding.txtPlayerError.visibility = View.GONE
-                binding.btnReportChannel.visibility = View.GONE
-                PlayerManager.retryCurrent()
-            }
-        }
-    }
-
-    override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        binding = ActivityPlayerBinding.inflate(layoutInflater)
+
+
+        binding =
+            ActivityPlayerBinding.inflate(layoutInflater)
+
+
         setContentView(binding.root)
-        prefs = PreferenceManager(this)
-        repository = LiveRepository(this)
-        WindowCompat.setDecorFitsSystemWindows(window, false)
-        WindowInsetsControllerCompat(window, binding.root).let { c ->
-            c.hide(WindowInsetsCompat.Type.systemBars())
-            c.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+
+
+        prefs =
+            PreferenceManager(this)
+
+
+        repository =
+            LiveRepository(this)
+
+
+
+        WindowCompat.setDecorFitsSystemWindows(
+            window,
+            false
+        )
+
+
+        WindowInsetsControllerCompat(
+            window,
+            binding.root
+        ).let { controller ->
+
+            controller.hide(
+                WindowInsetsCompat.Type.systemBars()
+            )
+
+            controller.systemBarsBehavior =
+                WindowInsetsControllerCompat
+                    .BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
-        binding.progressBar.visibility = View.GONE
-        binding.btnReportChannel.visibility = View.GONE
-        binding.playerView.setShowSubtitleButton(false)
-        binding.playerView.subtitleView?.setApplyEmbeddedStyles(false)
-        updateChannelUI(PlayerState.currentChannel())
+
+
+
+        binding.progressBar.visibility =
+            View.GONE
+
+
+        binding.btnReportChannel.visibility =
+            View.GONE
+
+
+        binding.playerView.setShowSubtitleButton(
+            false
+        )
+
+
+        binding.playerView.subtitleView
+            ?.setApplyEmbeddedStyles(false)
+
+
+
+        updateChannelUI(
+            PlayerState.currentChannel()
+        )
+
+        PlayerManager.setRecoveryFailedListener {
+
+            runOnUiThread {
+
+                showPermanentPlaybackError()
+
+            }
+
+        }
+
+
         showUiWithTimeout()
+
+
         setupClickListeners()
-        PlayerManager.moveTo(this, binding.playerView)
-        onBackPressedDispatcher.addCallback(this) { finish() }
+
+
+
+        PlayerManager.moveTo(
+            this,
+            binding.playerView
+        )
+
+
+        onBackPressedDispatcher.addCallback(this) {
+
+            finish()
+        }
     }
 
-    private fun buildStreamUrl(channel: LiveChannel): String {
-        val server = prefs.getServer().trim().trimEnd('/')
+
+
+    private fun buildStreamUrl(
+        channel: LiveChannel
+    ): String {
+
+
+        val server =
+            prefs.getServer()
+                .trim()
+                .trimEnd('/')
+
+
         return "$server/live/${prefs.getUsername().trim()}/${prefs.getPassword().trim()}/${channel.stream_id}.m3u8"
     }
 
+
+
     private fun setupClickListeners() {
-        binding.root.setOnClickListener { toggleUi() }
-        binding.playerView.setOnClickListener { toggleUi() }
-        binding.btnPlayPause.setOnClickListener { if (PlayerManager.isPlaying()) PlayerManager.pause() else PlayerManager.resume(); showUiWithTimeout() }
-        binding.btnNext.setOnClickListener { playNextChannel(); showUiWithTimeout() }
-        binding.btnPrev.setOnClickListener { playPreviousChannel(); showUiWithTimeout() }
-        binding.btnInfo.setOnClickListener {
-            val id = PlayerState.currentChannel()?.stream_id
-            if (id == null) Toast.makeText(this, "Channel not available", Toast.LENGTH_SHORT).show()
-            else StreamInfoDialog.newInstance(id.toString()).show(supportFragmentManager, "StreamInfoDialog")
+
+
+        binding.root.setOnClickListener {
+
+            toggleUi()
+        }
+
+
+        binding.playerView.setOnClickListener {
+
+            toggleUi()
+        }
+
+
+
+        binding.btnPlayPause.setOnClickListener {
+
+
+            if (PlayerManager.isPlaying()) {
+
+                PlayerManager.pause()
+
+            } else {
+
+                PlayerManager.resume()
+            }
+
+
             showUiWithTimeout()
         }
-        binding.btnAspect.setOnClickListener {
-            currentAspectRatioIndex = (currentAspectRatioIndex + 1) % 4
-            val msg = when (currentAspectRatioIndex) {
-                0 -> { binding.playerView.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT; "Aspect Ratio: Fit" }
-                1 -> { binding.playerView.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FILL; "Aspect Ratio: Fill" }
-                2 -> { binding.playerView.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM; "Aspect Ratio: Zoom" }
-                else -> { binding.playerView.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH; "Aspect Ratio: Fixed Width" }
-            }
-            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show(); showUiWithTimeout()
+
+
+
+        binding.btnNext.setOnClickListener {
+
+            playNextChannel()
+
+            showUiWithTimeout()
         }
-        binding.btnGrid.setOnClickListener {
-            if (PlayerState.channels.size < 2) {
-                Toast.makeText(this, "Multi-view needs at least 2 channels", Toast.LENGTH_SHORT).show()
+
+
+
+        binding.btnPrev.setOnClickListener {
+
+            playPreviousChannel()
+
+            showUiWithTimeout()
+        }
+
+
+
+        binding.btnInfo.setOnClickListener {
+
+
+            val id =
+                PlayerState.currentChannel()
+                    ?.stream_id
+
+
+
+            if (id == null) {
+
+
+                Toast.makeText(
+                    this,
+                    "Channel not available",
+                    Toast.LENGTH_SHORT
+                ).show()
+
+
             } else {
-                startActivity(Intent(this, MultiViewActivity::class.java))
+
+
+                StreamInfoDialog
+                    .newInstance(
+                        id.toString()
+                    )
+                    .show(
+                        supportFragmentManager,
+                        "StreamInfoDialog"
+                    )
+            }
+
+
+            showUiWithTimeout()
+        }
+
+
+
+        binding.btnAspect.setOnClickListener {
+
+
+            currentAspectRatioIndex =
+                (currentAspectRatioIndex + 1) % 4
+
+
+
+            val msg =
+                when (currentAspectRatioIndex) {
+
+
+                    0 -> {
+
+                        binding.playerView.resizeMode =
+                            AspectRatioFrameLayout
+                                .RESIZE_MODE_FIT
+
+
+                        "Aspect Ratio: Fit"
+                    }
+
+
+                    1 -> {
+
+                        binding.playerView.resizeMode =
+                            AspectRatioFrameLayout
+                                .RESIZE_MODE_FILL
+
+
+                        "Aspect Ratio: Fill"
+                    }
+
+
+                    2 -> {
+
+                        binding.playerView.resizeMode =
+                            AspectRatioFrameLayout
+                                .RESIZE_MODE_ZOOM
+
+
+                        "Aspect Ratio: Zoom"
+                    }
+
+
+                    else -> {
+
+                        binding.playerView.resizeMode =
+                            AspectRatioFrameLayout
+                                .RESIZE_MODE_FIXED_WIDTH
+
+
+                        "Aspect Ratio: Fixed Width"
+                    }
+                }
+
+
+
+            Toast.makeText(
+                this,
+                msg,
+                Toast.LENGTH_SHORT
+            ).show()
+
+
+            showUiWithTimeout()
+        }
+
+        binding.btnGrid.setOnClickListener {
+
+
+            if (PlayerState.channels.size < 2) {
+
+
+                Toast.makeText(
+                    this,
+                    "Multi-view needs at least 2 channels",
+                    Toast.LENGTH_SHORT
+                ).show()
+
+
+            } else {
+
+
+                startActivity(
+                    Intent(
+                        this,
+                        MultiViewActivity::class.java
+                    )
+                )
+
+
                 showUiWithTimeout()
             }
         }
+
+
+
         binding.btnSubtitle.setOnClickListener {
-            isSubtitleEnabled = !isSubtitleEnabled; toggleSubtitles(isSubtitleEnabled)
-            Toast.makeText(this, if (isSubtitleEnabled) "Subtitles Enabled" else "Subtitles Disabled", Toast.LENGTH_SHORT).show(); showUiWithTimeout()
+
+
+            isSubtitleEnabled =
+                !isSubtitleEnabled
+
+
+
+            toggleSubtitles(
+                isSubtitleEnabled
+            )
+
+
+
+            Toast.makeText(
+                this,
+                if (isSubtitleEnabled)
+                    "Subtitles Enabled"
+                else
+                    "Subtitles Disabled",
+                Toast.LENGTH_SHORT
+            ).show()
+
+
+
+            showUiWithTimeout()
         }
+
+
+
+
         binding.btnReportChannel.setOnClickListener {
-            val name = PlayerState.currentChannel()?.name ?: "Unknown Channel"
-            val data = hashMapOf("senderId" to "system_bot", "senderName" to "System", "text" to "🚨 System Alert : ${prefs.getUsername()} reported that the channel '$name' is currently down.", "ts" to com.google.firebase.firestore.FieldValue.serverTimestamp())
-            binding.btnReportChannel.visibility = View.GONE; binding.txtPlayerError.text = "Sending report..."
-            com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("rooms").document("channel_down").collection("messages").add(data)
-                .addOnSuccessListener { binding.txtPlayerError.text = "Channel reported. Our team will look into it." }
-                .addOnFailureListener { e -> binding.btnReportChannel.visibility = View.VISIBLE; binding.txtPlayerError.text = "Failed to send report."; Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_LONG).show() }
+
+
+            val name =
+                PlayerState.currentChannel()
+                    ?.name
+                    ?: "Unknown Channel"
+
+
+
+            val data =
+                hashMapOf(
+
+                    "senderId" to "system_bot",
+
+                    "senderName" to "System",
+
+                    "text" to
+                            "🚨 System Alert : ${prefs.getUsername()} reported that the channel '$name' is currently down.",
+
+                    "ts" to
+                            com.google.firebase.firestore.FieldValue.serverTimestamp()
+                )
+
+
+
+            binding.btnReportChannel.visibility =
+                View.GONE
+
+
+
+            binding.txtPlayerError.text =
+                "Sending report..."
+
+
+
+            com.google.firebase.firestore.FirebaseFirestore
+                .getInstance()
+                .collection("rooms")
+                .document("channel_down")
+                .collection("messages")
+                .add(data)
+
+
+
+                .addOnSuccessListener {
+
+
+                    binding.txtPlayerError.text =
+                        "Channel reported. Our team will look into it."
+                }
+
+
+
+                .addOnFailureListener { e ->
+
+
+                    binding.btnReportChannel.visibility =
+                        View.VISIBLE
+
+
+
+                    binding.txtPlayerError.text =
+                        "Failed to send report."
+
+
+
+                    Toast.makeText(
+                        this,
+                        "Error: ${e.message}",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
         }
     }
 
-    private fun toggleSubtitles(enable: Boolean) {
-        val player = binding.playerView.player ?: return
-        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !enable).build()
-        binding.btnSubtitle.setColorFilter(if (enable) Color.parseColor("#FFC107") else Color.WHITE)
+
+
+
+
+    private fun toggleSubtitles(
+        enable: Boolean
+    ) {
+
+
+        val player =
+            binding.playerView.player
+                ?: return
+
+
+
+        player.trackSelectionParameters =
+            player.trackSelectionParameters
+                .buildUpon()
+                .setTrackTypeDisabled(
+                    C.TRACK_TYPE_TEXT,
+                    !enable
+                )
+                .build()
+
+
+
+        binding.btnSubtitle.setColorFilter(
+
+            if (enable)
+
+                Color.parseColor("#FFC107")
+
+            else
+
+                Color.WHITE
+        )
     }
+
+
+
+
+
 
     override fun onResume() {
+
+
         super.onResume()
-        PlayerManager.attach(this, binding.playerView); PlayerManager.resume(); binding.playerView.player?.addListener(playerListener)
+
+
+
+        PlayerManager.attach(
+            this,
+            binding.playerView
+        )
+
+
+
+        PlayerManager.resume()
+
+
+
+        // avoid duplicate listener callbacks
+
+        binding.playerView.player
+            ?.removeListener(playerListener)
+
+
+
+        binding.playerView.player
+            ?.addListener(playerListener)
+
+
+
+
+
         when {
-            binding.playerView.player?.playbackState == Player.STATE_READY -> { hasEverPlayed = true; binding.progressBar.visibility = View.GONE; binding.txtPlayerError.visibility = View.GONE; binding.btnReportChannel.visibility = View.GONE }
-            binding.playerView.player?.playbackState == Player.STATE_BUFFERING -> binding.progressBar.visibility = View.VISIBLE
-            binding.playerView.player?.playerError != null -> { binding.progressBar.visibility = View.GONE; binding.txtPlayerError.visibility = View.VISIBLE; binding.btnReportChannel.visibility = View.VISIBLE }
+
+
+            binding.playerView.player?.playbackState ==
+                    Player.STATE_READY -> {
+
+
+
+                hasEverPlayed = true
+
+
+
+                binding.progressBar.visibility =
+                    View.GONE
+
+
+
+                binding.txtPlayerError.visibility =
+                    View.GONE
+
+
+
+                binding.btnReportChannel.visibility =
+                    View.GONE
+            }
+
+
+
+
+
+            binding.playerView.player?.playbackState ==
+                    Player.STATE_BUFFERING -> {
+
+
+
+                binding.progressBar.visibility =
+                    View.VISIBLE
+            }
+
+
+
+
+
+            binding.playerView.player?.playerError != null -> {
+
+
+
+                binding.progressBar.visibility =
+                    View.GONE
+
+
+
+                binding.txtPlayerError.visibility =
+                    View.VISIBLE
+
+
+
+                binding.btnReportChannel.visibility =
+                    View.VISIBLE
+            }
         }
-        toggleSubtitles(isSubtitleEnabled); showUiWithTimeout(); binding.root.postDelayed({ binding.btnPlayPause.requestFocus() }, 350)
+
+
+
+
+        toggleSubtitles(
+            isSubtitleEnabled
+        )
+
+
+
+        showUiWithTimeout()
+
+
+
+        binding.root.postDelayed(
+            {
+
+                binding.btnPlayPause.requestFocus()
+
+            },
+            350
+        )
     }
 
     override fun onPause() {
-        super.onPause(); binding.playerView.player?.removeListener(playerListener); hideHandler.removeCallbacks(hideRunnable); PlayerManager.pause(); PlayerManager.detach(binding.playerView)
+
+        super.onPause()
+
+
+        binding.playerView.player
+            ?.removeListener(playerListener)
+
+
+
+        hideHandler.removeCallbacks(
+            hideRunnable
+        )
+
+
+
+        PlayerManager.pause()
+
+
+
+        PlayerManager.detach(
+            binding.playerView
+        )
     }
 
-    override fun onDestroy() { retryJob?.cancel(); PlayerManager.detach(binding.playerView); super.onDestroy() }
+
+
+
+
+    override fun onDestroy() {
+
+        PlayerManager.setRecoveryFailedListener(null)
+
+        PlayerManager.detach(
+            binding.playerView
+        )
+
+        super.onDestroy()
+    }
+
+
+
+
+
 
     private fun showPermanentPlaybackError() {
-        retryJob?.cancel(); retryJob = null; errorActive = true; binding.progressBar.visibility = View.GONE
-        binding.txtPlayerError.text = "Unable to play this stream right now. It may be temporarily unavailable or your connection may be unstable."
-        binding.txtPlayerError.visibility = View.VISIBLE; binding.btnReportChannel.visibility = View.VISIBLE; binding.btnReportChannel.post { binding.btnReportChannel.requestFocus() }; showUiWithTimeout()
+
+
+        errorActive = true
+
+
+
+        binding.progressBar.visibility =
+            View.GONE
+
+
+
+        binding.txtPlayerError.text =
+            "Unable to play this stream right now. It may be temporarily unavailable or your connection may be unstable."
+
+
+
+        binding.txtPlayerError.visibility =
+            View.VISIBLE
+
+
+
+        binding.btnReportChannel.visibility =
+            View.VISIBLE
+
+
+
+        binding.btnReportChannel.post {
+
+
+            binding.btnReportChannel.requestFocus()
+        }
+
+
+
+        showUiWithTimeout()
     }
+
+
+
+
+
 
     private fun showUiWithTimeout() {
+
+
         val d = 300L
+
+
+
         if (binding.bottomOverlay.visibility != View.VISIBLE) {
-            binding.topTint.alpha = 0f; binding.topTint.visibility = View.VISIBLE; binding.topTint.animate().alpha(1f).setDuration(d).start()
-            binding.txtChannelTitle.alpha = 0f; binding.txtChannelTitle.visibility = View.VISIBLE; binding.txtChannelTitle.animate().alpha(1f).setDuration(d).start()
-            binding.bottomOverlay.alpha = 0f; binding.bottomOverlay.translationY = 50f; binding.bottomOverlay.visibility = View.VISIBLE
-            binding.bottomOverlay.animate().alpha(1f).translationY(0f).setDuration(d).withEndAction { if (binding.btnReportChannel.visibility != View.VISIBLE) binding.btnPlayPause.post { binding.btnPlayPause.requestFocus() } }.start()
+
+
+
+            binding.topTint.alpha = 0f
+
+
+            binding.topTint.visibility =
+                View.VISIBLE
+
+
+
+            binding.topTint.animate()
+                .alpha(1f)
+                .setDuration(d)
+                .start()
+
+
+
+
+
+            binding.txtChannelTitle.alpha = 0f
+
+
+            binding.txtChannelTitle.visibility =
+                View.VISIBLE
+
+
+
+            binding.txtChannelTitle.animate()
+                .alpha(1f)
+                .setDuration(d)
+                .start()
+
+
+
+
+
+            binding.bottomOverlay.alpha = 0f
+
+
+            binding.bottomOverlay.translationY =
+                50f
+
+
+
+            binding.bottomOverlay.visibility =
+                View.VISIBLE
+
+
+
+
+            binding.bottomOverlay.animate()
+                .alpha(1f)
+                .translationY(0f)
+                .setDuration(d)
+                .withEndAction {
+
+
+
+                    if (binding.btnReportChannel.visibility != View.VISIBLE) {
+
+
+
+                        binding.btnPlayPause.post {
+
+
+                            binding.btnPlayPause.requestFocus()
+                        }
+                    }
+                }
+                .start()
         }
-        hideHandler.removeCallbacks(hideRunnable); hideHandler.postDelayed(hideRunnable, 5000)
+
+
+
+
+        hideHandler.removeCallbacks(
+            hideRunnable
+        )
+
+
+
+        hideHandler.postDelayed(
+            hideRunnable,
+            5000
+        )
     }
 
-    private fun toggleUi() { if (binding.bottomOverlay.visibility == View.VISIBLE) { hideHandler.removeCallbacks(hideRunnable); hideRunnable.run() } else showUiWithTimeout() }
 
-    private fun switchToChannel(channel: LiveChannel) {
-        retryJob?.cancel()
-        retryJob = null
 
-        // The old ExoPlayer is released/replaced by PlayerManager when the URL changes.
-        // Remove the listener from the old instance before switching, then attach it to
-        // the new instance so BUFFERING/READY updates the loading indicator correctly.
-        binding.playerView.player?.removeListener(playerListener)
 
-        retryCount = 0
-        recoveryStartedAtMs = 0L
+
+
+    private fun toggleUi() {
+
+
+        if (binding.bottomOverlay.visibility == View.VISIBLE) {
+
+
+
+            hideHandler.removeCallbacks(
+                hideRunnable
+            )
+
+
+
+            hideRunnable.run()
+
+
+
+        } else {
+
+
+
+            showUiWithTimeout()
+        }
+    }
+
+    private fun switchToChannel(
+        channel: LiveChannel
+    ) {
+
+
+        binding.playerView.player
+            ?.removeListener(playerListener)
+
+
+
         errorActive = false
+
         hasEverPlayed = false
 
-        binding.progressBar.visibility = View.VISIBLE
-        binding.txtPlayerError.visibility = View.GONE
-        binding.btnReportChannel.visibility = View.GONE
 
-        updateChannelUI(channel)
-        PlayerManager.play(this, binding.playerView, buildStreamUrl(channel))
 
-        binding.playerView.player?.addListener(playerListener)
+        binding.progressBar.visibility =
+            View.VISIBLE
 
-        // The new player may already have entered BUFFERING before the listener was
-        // attached, so explicitly synchronize the indicator with its current state.
-        if (binding.playerView.player?.playbackState == Player.STATE_READY) {
-            binding.progressBar.visibility = View.GONE
+
+
+        binding.txtPlayerError.visibility =
+            View.GONE
+
+
+
+        binding.btnReportChannel.visibility =
+            View.GONE
+
+
+
+
+        updateChannelUI(
+            channel
+        )
+
+
+
+        PlayerManager.play(
+            this,
+            binding.playerView,
+            buildStreamUrl(channel)
+        )
+
+
+
+        binding.playerView.player
+            ?.addListener(playerListener)
+
+
+
+
+        if (binding.playerView.player?.playbackState ==
+            Player.STATE_READY) {
+
+
+
+            binding.progressBar.visibility =
+                View.GONE
+
+
+
             hasEverPlayed = true
+
+
+
         } else {
-            binding.progressBar.visibility = View.VISIBLE
+
+
+            binding.progressBar.visibility =
+                View.VISIBLE
         }
 
-        toggleSubtitles(isSubtitleEnabled)
+
+
+        toggleSubtitles(
+            isSubtitleEnabled
+        )
     }
+
+
+
+
+
+
 
     private fun playNextChannel() {
-        PlayerState.next()?.let { channel ->
-            switchToChannel(channel)
-        }
+
+
+        PlayerState.next()
+            ?.let { channel ->
+
+
+                switchToChannel(
+                    channel
+                )
+            }
     }
+
+
+
+
+
+
 
     private fun playPreviousChannel() {
-        PlayerState.previous()?.let { channel ->
-            switchToChannel(channel)
-        }
+
+
+        PlayerState.previous()
+            ?.let { channel ->
+
+
+                switchToChannel(
+                    channel
+                )
+            }
     }
 
-    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+
+
+
+
+
+
+
+    override fun onKeyDown(
+        keyCode: Int,
+        event: KeyEvent?
+    ): Boolean {
+
+
+
         if (binding.bottomOverlay.visibility != View.VISIBLE) {
-            when (keyCode) { KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> { showUiWithTimeout(); return true } }
+
+
+
+            when (keyCode) {
+
+
+                KeyEvent.KEYCODE_DPAD_CENTER,
+                KeyEvent.KEYCODE_ENTER,
+                KeyEvent.KEYCODE_DPAD_UP,
+                KeyEvent.KEYCODE_DPAD_DOWN,
+                KeyEvent.KEYCODE_DPAD_LEFT,
+                KeyEvent.KEYCODE_DPAD_RIGHT -> {
+
+
+
+                    showUiWithTimeout()
+
+
+                    return true
+                }
+            }
+
+
+
         } else {
-            hideHandler.removeCallbacks(hideRunnable); hideHandler.postDelayed(hideRunnable, 5000)
-            when (keyCode) { KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_DPAD_UP -> { playNextChannel(); return true }; KeyEvent.KEYCODE_CHANNEL_DOWN, KeyEvent.KEYCODE_DPAD_DOWN -> { playPreviousChannel(); return true } }
+
+
+
+            hideHandler.removeCallbacks(
+                hideRunnable
+            )
+
+
+
+            hideHandler.postDelayed(
+                hideRunnable,
+                5000
+            )
+
+
+
+            when (keyCode) {
+
+
+
+                KeyEvent.KEYCODE_CHANNEL_UP,
+                KeyEvent.KEYCODE_DPAD_UP -> {
+
+
+                    playNextChannel()
+
+
+                    return true
+                }
+
+
+
+                KeyEvent.KEYCODE_CHANNEL_DOWN,
+                KeyEvent.KEYCODE_DPAD_DOWN -> {
+
+
+                    playPreviousChannel()
+
+
+                    return true
+                }
+            }
         }
-        if (keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) { showUiWithTimeout(); if (PlayerManager.isPlaying()) PlayerManager.pause() else PlayerManager.resume(); return true }
-        return super.onKeyDown(keyCode, event)
+
+
+
+
+        if (keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) {
+
+
+            showUiWithTimeout()
+
+
+
+            if (PlayerManager.isPlaying()) {
+
+
+                PlayerManager.pause()
+
+
+            } else {
+
+
+                PlayerManager.resume()
+            }
+
+
+
+            return true
+        }
+
+
+
+        return super.onKeyDown(
+            keyCode,
+            event
+        )
     }
 
-    private fun updateChannelUI(channel: LiveChannel?) {
-        if (channel == null) return
-        retryJob?.cancel(); retryCount = 0; recoveryStartedAtMs = 0L; errorActive = false; hasEverPlayed = false
-        binding.txtPlayerError.visibility = View.GONE; binding.btnReportChannel.visibility = View.GONE
-        val num = channel.num?.let { "$it - " } ?: ""
-        binding.txtChannelTitle.text = "$num${channel.name ?: "Unknown Channel"}"
-        val epgId = channel.epg_channel_id ?: channel.stream_id?.toString() ?: ""
-        if (epgId.isNotEmpty()) loadEpg(epgId)
-    }
 
-    private fun loadEpg(epgId: String) {
-        lifecycleScope.launch(Dispatchers.IO) {
-            try { val (now, next) = repository.getNowNextEpg(epgId); withContext(Dispatchers.Main) { updateEpg(now, next) } }
-            catch (_: Exception) { withContext(Dispatchers.Main) { binding.txtNowTitle.text = "No EPG Data"; binding.txtNextTitle.text = ""; binding.txtNowTime.text = ""; binding.txtNextTime.text = ""; binding.epgProgress.layoutParams = binding.epgProgress.layoutParams.apply { width = 0 } } }
+
+
+
+
+
+
+
+    private fun updateChannelUI(
+        channel: LiveChannel?
+    ) {
+
+
+        if (channel == null)
+            return
+
+
+
+        errorActive = false
+
+        hasEverPlayed = false
+
+
+
+
+        binding.txtPlayerError.visibility =
+            View.GONE
+
+
+
+        binding.btnReportChannel.visibility =
+            View.GONE
+
+
+
+
+        val num =
+            channel.num?.let {
+
+                "$it - "
+
+            } ?: ""
+
+
+
+
+        binding.txtChannelTitle.text =
+            "$num${channel.name ?: "Unknown Channel"}"
+
+
+
+
+        val epgId =
+            channel.epg_channel_id
+                ?: channel.stream_id?.toString()
+                ?: ""
+
+
+
+        if (epgId.isNotEmpty()) {
+
+
+            loadEpg(
+                epgId
+            )
         }
     }
 
-    private fun updateEpg(now: com.network24.player.core.database.entity.EpgEntity?, next: com.network24.player.core.database.entity.EpgEntity?) {
+    private fun loadEpg(
+        epgId: String
+    ) {
+
+
+        lifecycleScope.launch(
+            Dispatchers.IO
+        ) {
+
+
+            try {
+
+
+                val (now, next) =
+                    repository.getNowNextEpg(
+                        epgId
+                    )
+
+
+
+                withContext(
+                    Dispatchers.Main
+                ) {
+
+
+                    updateEpg(
+                        now,
+                        next
+                    )
+                }
+
+
+
+            } catch (_: Exception) {
+
+
+
+                withContext(
+                    Dispatchers.Main
+                ) {
+
+
+                    binding.txtNowTitle.text =
+                        "No EPG Data"
+
+
+                    binding.txtNextTitle.text =
+                        ""
+
+
+                    binding.txtNowTime.text =
+                        ""
+
+
+                    binding.txtNextTime.text =
+                        ""
+
+
+
+                    binding.epgProgress.layoutParams =
+                        binding.epgProgress.layoutParams.apply {
+
+                            width = 0
+                        }
+                }
+            }
+        }
+    }
+
+
+
+
+
+
+
+    private fun updateEpg(
+        now: com.network24.player.core.database.entity.EpgEntity?,
+        next: com.network24.player.core.database.entity.EpgEntity?
+    ) {
+
+
+
         if (now != null) {
-            binding.txtNowTitle.text = now.title ?: "No Program Info"; binding.txtNowTime.text = "${formatTime(now.startTimestamp)} - ${formatTime(now.stopTimestamp)}"
-            val p = calculateEpgProgress(now.startTimestamp, now.stopTimestamp); binding.epgTrack.post { binding.epgProgress.layoutParams = binding.epgProgress.layoutParams.apply { width = (binding.epgTrack.width * p).toInt() } }
-        } else { binding.txtNowTitle.text = "No Program Info"; binding.txtNowTime.text = ""; binding.epgProgress.layoutParams = binding.epgProgress.layoutParams.apply { width = 0 } }
-        if (next != null) { binding.txtNextTitle.text = next.title ?: ""; binding.txtNextTime.text = "${formatTime(next.startTimestamp)} - ${formatTime(next.stopTimestamp)}" } else { binding.txtNextTitle.text = ""; binding.txtNextTime.text = "" }
+
+
+
+            binding.txtNowTitle.text =
+                now.title ?: "No Program Info"
+
+
+
+            binding.txtNowTime.text =
+                "${formatTime(now.startTimestamp)} - ${formatTime(now.stopTimestamp)}"
+
+
+
+
+            val progress =
+                calculateEpgProgress(
+                    now.startTimestamp,
+                    now.stopTimestamp
+                )
+
+
+
+            binding.epgTrack.post {
+
+
+
+                binding.epgProgress.layoutParams =
+                    binding.epgProgress.layoutParams.apply {
+
+
+                        width =
+                            (binding.epgTrack.width * progress)
+                                .toInt()
+                    }
+            }
+
+
+
+        } else {
+
+
+
+            binding.txtNowTitle.text =
+                "No Program Info"
+
+
+            binding.txtNowTime.text =
+                ""
+
+
+            binding.epgProgress.layoutParams =
+                binding.epgProgress.layoutParams.apply {
+
+                    width = 0
+                }
+        }
+
+
+
+
+        if (next != null) {
+
+
+
+            binding.txtNextTitle.text =
+                next.title ?: ""
+
+
+
+            binding.txtNextTime.text =
+                "${formatTime(next.startTimestamp)} - ${formatTime(next.stopTimestamp)}"
+
+
+
+        } else {
+
+
+
+            binding.txtNextTitle.text =
+                ""
+
+
+            binding.txtNextTime.text =
+                ""
+        }
     }
 
-    private fun formatTime(timeMs: Long?): String = if (timeMs == null || timeMs == 0L) "" else try { SimpleDateFormat("hh:mm a", Locale.getDefault()).format(java.util.Date(timeMs)) } catch (_: Exception) { "" }
-    private fun calculateEpgProgress(startMs: Long?, stopMs: Long?): Float = if (startMs == null || stopMs == null || stopMs <= startMs) 0f else ((System.currentTimeMillis() - startMs).toFloat() / (stopMs - startMs).toFloat()).coerceIn(0f, 1f)
-    private fun showPlayerError(message: String) { binding.txtPlayerError.text = message; binding.txtPlayerError.visibility = View.VISIBLE; showUiWithTimeout() }
+
+
+
+
+
+
+    private fun formatTime(
+        timeMs: Long?
+    ): String {
+
+
+        return if (
+            timeMs == null ||
+            timeMs == 0L
+        ) {
+
+
+            ""
+
+
+        } else {
+
+
+            try {
+
+
+                SimpleDateFormat(
+                    "hh:mm a",
+                    Locale.getDefault()
+                ).format(
+                    java.util.Date(timeMs)
+                )
+
+
+            } catch (_: Exception) {
+
+
+                ""
+            }
+        }
+    }
+
+
+
+
+
+
+
+    private fun calculateEpgProgress(
+        startMs: Long?,
+        stopMs: Long?
+    ): Float {
+
+
+
+        if (
+            startMs == null ||
+            stopMs == null ||
+            stopMs <= startMs
+        ) {
+
+
+            return 0f
+        }
+
+
+
+        return (
+                (System.currentTimeMillis() - startMs)
+                    .toFloat()
+                        /
+                        (stopMs - startMs)
+                            .toFloat()
+                )
+            .coerceIn(
+                0f,
+                1f
+            )
+    }
+
+
+
+
+
+
+
+    private fun showPlayerError(
+        message: String
+    ) {
+
+
+        binding.txtPlayerError.text =
+            message
+
+
+        binding.txtPlayerError.visibility =
+            View.VISIBLE
+
+
+
+        showUiWithTimeout()
+    }
 }
