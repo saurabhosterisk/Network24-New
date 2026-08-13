@@ -46,7 +46,7 @@ object PlayerManager {
 
     private var currentPlayerView: PlayerView? = null
 
-
+    private var playbackSessionId = 0
 
 
     /**
@@ -510,6 +510,7 @@ object PlayerManager {
                                     error: PlaybackException
                                 ) {
 
+                                    val errorSession = playbackSessionId
 
                                     lastError =
                                         error
@@ -526,13 +527,11 @@ object PlayerManager {
 
                                     playerScope.launch {
 
-
                                         delay(500)
 
-                                        android.util.Log.e(
-                                            "N24_RECOVERY",
-                                            "start=${liveRecoveryStartedAtMs}, now=${System.currentTimeMillis()}, attempt=$liveRecoveryAttempt"
-                                        )
+                                        if (errorSession != playbackSessionId) {
+                                            return@launch
+                                        }
 
                                         scheduleLiveChannelRecoveryIfNeeded()
 
@@ -668,6 +667,7 @@ object PlayerManager {
         streamUrl: String
     ) {
 
+        playbackSessionId++
 
 
         cancelLiveRecovery()
@@ -753,7 +753,7 @@ object PlayerManager {
 
     fun retryCurrent() {
 
-
+        playbackSessionId++
         cancelLiveRecovery()
 
 
@@ -888,6 +888,7 @@ object PlayerManager {
 
     private fun scheduleLiveChannelRecoveryIfNeeded() {
 
+        val recoverySession = playbackSessionId
 
         val activity =
             ownerActivityRef
@@ -903,61 +904,24 @@ object PlayerManager {
         ) return
 
 
-
-
-        if (
-            liveRecoveryStartedAtMs == 0L
-        ) {
-
-            liveRecoveryStartedAtMs =
-                System.currentTimeMillis()
-
-            liveRecoveryAttempt =
-                0
-
-            android.util.Log.d(
-                "N24_RECOVERY",
-                "Recovery started"
-            )
-        }
-
-
-
-
         val elapsed =
-            System.currentTimeMillis()
-        -
-        liveRecoveryStartedAtMs
-
-
-
-
-
-        android.util.Log.d(
-            "N24_RECOVERY",
-            "elapsed=$elapsed attempt=$liveRecoveryAttempt"
-        )
-
-
-
+            System.currentTimeMillis() -
+                    liveRecoveryStartedAtMs
 
         if (
             elapsed >= LIVE_RECOVERY_WINDOW_MS
         ) {
 
-
-            android.util.Log.e(
-                "N24_RECOVERY",
-                "Recovery failed after timeout"
-            )
+            if (
+                recoverySession != playbackSessionId
+            ) {
+                return
+            }
 
 
             recoveryFailedListeners.forEach { listener ->
-
                 listener.invoke()
-
             }
-
 
             cancelLiveRecovery()
 
@@ -1000,8 +964,6 @@ object PlayerManager {
 
 
 
-
-
         liveRecoveryJob =
             playerScope.launch {
 
@@ -1009,10 +971,18 @@ object PlayerManager {
                 delay(delayTime)
 
 
+                if (
+                    recoverySession != playbackSessionId
+                ) {
+                    return@launch
+                }
+
 
                 if (
                     failedUrl == null
-                ) return@launch
+                ) {
+                    return@launch
+                }
 
 
 
@@ -1196,13 +1166,11 @@ object PlayerManager {
     fun setRecoveryFailedListener(
         listener: (() -> Unit)?
     ) {
+        recoveryFailedListeners.clear()
 
         if(listener != null) {
-
             recoveryFailedListeners.add(listener)
-
         }
-
     }
 
 
