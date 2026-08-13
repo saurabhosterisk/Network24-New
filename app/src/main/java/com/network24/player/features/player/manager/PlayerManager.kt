@@ -48,6 +48,8 @@ object PlayerManager {
 
     private var playbackSessionId = 0
 
+    private var streamGeneration = 0
+
 
     /**
      * WeakReference prevents Activity memory leak
@@ -501,9 +503,6 @@ object PlayerManager {
 
 
 
-
-
-
                                 override fun onPlayerError(
                                     error: PlaybackException
                                 ) {
@@ -694,6 +693,7 @@ object PlayerManager {
             currentUrl != streamUrl
         ) {
 
+            streamGeneration++
 
             resetDiagnostics()
 

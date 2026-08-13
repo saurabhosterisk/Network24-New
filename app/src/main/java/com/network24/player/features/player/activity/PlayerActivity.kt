@@ -730,21 +730,6 @@ class PlayerActivity : BaseActivity() {
         PlayerManager.resume()
 
 
-
-        // avoid duplicate listener callbacks
-
-        binding.playerView.player
-            ?.removeListener(playerListener)
-
-
-
-        binding.playerView.player
-            ?.addListener(playerListener)
-
-
-
-
-
         when {
 
 
@@ -1049,9 +1034,6 @@ class PlayerActivity : BaseActivity() {
     ) {
 
 
-        binding.playerView.player
-            ?.removeListener(playerListener)
-
 
 
         errorActive = false
@@ -1089,9 +1071,6 @@ class PlayerActivity : BaseActivity() {
         )
 
 
-
-        binding.playerView.player
-            ?.addListener(playerListener)
 
 
 
