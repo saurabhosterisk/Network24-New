@@ -37,7 +37,7 @@ import kotlinx.coroutines.withContext
 
 import java.text.SimpleDateFormat
 import java.util.Locale
-
+import androidx.media3.common.TrackSelectionOverride
 
 class PlayerActivity : BaseActivity() {
 
@@ -635,22 +635,65 @@ class PlayerActivity : BaseActivity() {
         enable: Boolean
     ) {
 
-
         val player =
             binding.playerView.player
                 ?: return
 
 
-
-        player.trackSelectionParameters =
+        val builder =
             player.trackSelectionParameters
                 .buildUpon()
+
+
+        if (enable) {
+
+            var subtitleFound = false
+
+
+            player.currentTracks.groups.forEach { group ->
+
+                if (group.type == C.TRACK_TYPE_TEXT) {
+
+                    for (i in 0 until group.length) {
+
+                        if (group.isTrackSupported(i)) {
+
+                            builder
+                                .setTrackTypeDisabled(
+                                    C.TRACK_TYPE_TEXT,
+                                    false
+                                )
+                                .setOverrideForType(
+                                    TrackSelectionOverride(
+                                        group.mediaTrackGroup,
+                                        i
+                                    )
+                                )
+
+                            subtitleFound = true
+                            break
+                        }
+                    }
+                }
+            }
+
+
+
+        } else {
+
+            builder
+                .clearOverridesOfType(
+                    C.TRACK_TYPE_TEXT
+                )
                 .setTrackTypeDisabled(
                     C.TRACK_TYPE_TEXT,
-                    !enable
+                    true
                 )
-                .build()
+        }
 
+
+        player.trackSelectionParameters =
+            builder.build()
 
 
         binding.btnSubtitle.setColorFilter(
