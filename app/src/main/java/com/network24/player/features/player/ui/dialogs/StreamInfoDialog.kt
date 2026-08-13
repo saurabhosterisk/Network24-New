@@ -199,7 +199,23 @@ class StreamInfoDialog : DialogFragment() {
 
 
         if (hasError) {
-            return "Playback error detected. Stream source may have an issue."
+
+            return when (
+                PlayerManager.getStreamErrorType()
+            ) {
+
+                PlayerManager.StreamErrorType.NETWORK ->
+                    "Network connection lost. Trying to reconnect..."
+
+                PlayerManager.StreamErrorType.SOURCE ->
+                    "Unable to play this stream. Source may be unavailable."
+
+                PlayerManager.StreamErrorType.UNKNOWN ->
+                    "Playback error detected. Please wait while player recovers."
+
+                else ->
+                    "Stream is recovering..."
+            }
         }
 
 

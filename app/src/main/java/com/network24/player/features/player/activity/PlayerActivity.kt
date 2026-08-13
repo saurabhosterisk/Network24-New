@@ -725,7 +725,8 @@ class PlayerActivity : BaseActivity() {
             binding.playerView
         )
 
-
+        binding.playerView.player
+            ?.addListener(playerListener)
 
         PlayerManager.resume()
 
@@ -829,15 +830,6 @@ class PlayerActivity : BaseActivity() {
             hideRunnable
         )
 
-
-
-        PlayerManager.pause()
-
-
-
-        PlayerManager.detach(
-            binding.playerView
-        )
     }
 
 
@@ -882,9 +874,18 @@ class PlayerActivity : BaseActivity() {
 
 
 
-        binding.btnReportChannel.visibility =
-            View.VISIBLE
+        val errorType =
+            PlayerManager.getStreamErrorType()
 
+        binding.btnReportChannel.visibility =
+            if (
+                errorType ==
+                PlayerManager.StreamErrorType.SOURCE
+            ) {
+                View.VISIBLE
+            } else {
+                View.GONE
+            }
 
 
         binding.btnReportChannel.post {

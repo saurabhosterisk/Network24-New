@@ -92,6 +92,19 @@ object PlayerManager {
             PlaybackException? = null
 
 
+    enum class StreamErrorType {
+        NONE,
+        NETWORK,
+        SOURCE,
+        UNKNOWN
+    }
+
+    private var streamErrorType =
+        StreamErrorType.NONE
+
+
+
+
     private var lastPlaybackState =
         Player.STATE_IDLE
 
@@ -276,12 +289,7 @@ object PlayerManager {
                         owner === activity
                     ) {
 
-
-                        cancelLiveRecovery()
-
-
-                        release()
-
+                        exoPlayer?.pause()
 
                         ownerActivityRef =
                             null
@@ -513,13 +521,22 @@ object PlayerManager {
                                         error
 
 
-                                    android.util.Log.e(
+                                    streamErrorType =
+                                        when(error.errorCode) {
 
-                                        "N24_PLAYER_ERROR",
+                                            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
+                                            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ->
+                                                StreamErrorType.NETWORK
 
-                                        "code=${error.errorCode}, msg=${error.message}"
 
-                                    )
+                                            PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS,
+                                            PlaybackException.ERROR_CODE_DECODER_INIT_FAILED ->
+                                                StreamErrorType.SOURCE
+
+
+                                            else ->
+                                                StreamErrorType.UNKNOWN
+                                        }
 
 
                                     playerScope.launch {
@@ -1078,7 +1095,7 @@ object PlayerManager {
         lastError =
             null
 
-
+        streamErrorType = StreamErrorType.NONE
 
         lastPlaybackState =
             Player.STATE_IDLE
@@ -1258,6 +1275,10 @@ object PlayerManager {
         return lastError
     }
 
+
+    fun getStreamErrorType(): StreamErrorType {
+        return streamErrorType
+    }
 
 
 
