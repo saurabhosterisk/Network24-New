@@ -126,7 +126,8 @@ object PlayerManager {
     private var liveRecoveryAttempt =
         0
 
-
+    private var recoveryStatusListener:
+            ((Int) -> Unit)? = null
 
 
 
@@ -971,7 +972,9 @@ object PlayerManager {
         liveRecoveryAttempt++
 
 
-
+        recoveryStatusListener?.invoke(
+            liveRecoveryAttempt
+        )
 
 
         val failedUrl =
@@ -1195,6 +1198,11 @@ object PlayerManager {
         }
     }
 
+    fun setRecoveryStatusListener(
+        listener: ((Int) -> Unit)?
+    ) {
+        recoveryStatusListener = listener
+    }
 
 
 
@@ -1369,6 +1377,10 @@ object PlayerManager {
             ?: false
     }
 
+
+    fun getRecoveryAttempt(): Int {
+        return liveRecoveryAttempt
+    }
 
 
 

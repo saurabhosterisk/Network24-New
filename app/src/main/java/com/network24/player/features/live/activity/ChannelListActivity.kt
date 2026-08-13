@@ -223,39 +223,68 @@ class ChannelListActivity : BaseActivity() {
 
         PlayerManager.setRecoveryFailedListener {
 
-
             runOnUiThread {
 
+                when (
+                    PlayerManager.getStreamErrorType()
+                ) {
 
-                binding.progressLoading.visibility =
-                    View.GONE
+                    PlayerManager.StreamErrorType.NETWORK -> {
 
+                        binding.txtPlayerError.text =
+                            "Network connection lost.\nReconnecting..."
 
+                        binding.txtPlayerError.visibility =
+                            View.VISIBLE
 
-                binding.txtPlayerError.text =
-                    "Unable to play this stream right now. It may be temporarily unavailable or your connection may be unstable."
-
-
-
-                binding.txtPlayerError.visibility =
-                    View.VISIBLE
-
-
-
-                binding.btnReportChannel.visibility =
-                    View.VISIBLE
+                        binding.btnReportChannel.visibility =
+                            View.GONE
+                    }
 
 
+                    PlayerManager.StreamErrorType.SOURCE -> {
 
-                binding.btnReportChannel.post {
+                        binding.txtPlayerError.text =
+                            "Unable to play this stream right now. It may be temporarily unavailable."
+
+                        binding.txtPlayerError.visibility =
+                            View.VISIBLE
+
+                        binding.btnReportChannel.visibility =
+                            View.VISIBLE
+                    }
 
 
-                    binding.btnReportChannel.requestFocus()
+                    else -> {
+
+                        binding.txtPlayerError.text =
+                            "Unable to play this stream right now."
+
+                        binding.txtPlayerError.visibility =
+                            View.VISIBLE
+
+                        binding.btnReportChannel.visibility =
+                            View.GONE
+                    }
                 }
             }
         }
 
 
+        PlayerManager.setRecoveryStatusListener { attempt ->
+
+            runOnUiThread {
+
+                binding.txtPlayerError.text =
+                    "Network connection lost.\nReconnecting...\nAttempt $attempt/5"
+
+                binding.txtPlayerError.visibility =
+                    View.VISIBLE
+
+                binding.btnReportChannel.visibility =
+                    View.GONE
+            }
+        }
 
 
 

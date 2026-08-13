@@ -189,8 +189,15 @@ class PlayerActivity : BaseActivity() {
                     View.VISIBLE
 
 
+                val attempt =
+                    PlayerManager.getRecoveryAttempt()
+
                 binding.txtPlayerError.text =
-                    "Reconnecting..."
+                    if (attempt > 0) {
+                        "Reconnecting...\nAttempt $attempt/5"
+                    } else {
+                        "Reconnecting..."
+                    }
 
 
                 binding.txtPlayerError.visibility =
@@ -294,6 +301,21 @@ class PlayerActivity : BaseActivity() {
 
         }
 
+
+        PlayerManager.setRecoveryStatusListener { attempt ->
+
+            runOnUiThread {
+
+                binding.txtPlayerError.text =
+                    "Reconnecting...\nAttempt $attempt/5"
+
+                binding.txtPlayerError.visibility =
+                    View.VISIBLE
+
+                binding.btnReportChannel.visibility =
+                    View.GONE
+            }
+        }
 
         showUiWithTimeout()
 
@@ -839,6 +861,8 @@ class PlayerActivity : BaseActivity() {
     override fun onDestroy() {
 
         PlayerManager.setRecoveryFailedListener(null)
+
+        PlayerManager.setRecoveryStatusListener(null)
 
         PlayerManager.detach(
             binding.playerView
