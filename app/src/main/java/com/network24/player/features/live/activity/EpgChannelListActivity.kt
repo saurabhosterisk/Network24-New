@@ -1,5 +1,7 @@
 package com.network24.player.features.live.activity
 
+import android.app.AlertDialog
+import android.content.Intent
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
@@ -13,23 +15,31 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
+import android.widget.Toast
 
 import androidx.lifecycle.lifecycleScope
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
 
 import coil.load
+import com.google.firebase.firestore.FirebaseFirestore
 
 import com.network24.player.R
 import com.network24.player.core.base.BaseActivity
 import com.network24.player.core.database.DatabaseProvider
 import com.network24.player.core.database.entity.EpgEntity
+import com.network24.player.core.database.repository.FavoritesRepository
 import com.network24.player.core.preferences.PreferenceManager
 import com.network24.player.core.sync.SyncManager
 import com.network24.player.databinding.ActivityEpgChannelListBinding
 
+import com.network24.player.features.live.history.LiveWatchHistory
 import com.network24.player.features.live.models.LiveChannel
 import com.network24.player.features.live.repository.LiveRepository
 
+import com.network24.player.features.player.activity.PlayerActivity
 import com.network24.player.features.player.manager.PlayerManager
+import com.network24.player.features.player.state.PlayerState
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -61,6 +71,10 @@ class EpgChannelListActivity : BaseActivity() {
             PreferenceManager
 
 
+    private lateinit var favoritesRepository:
+            FavoritesRepository
+
+
 
     private lateinit var categoryId:
             String
@@ -83,6 +97,15 @@ class EpgChannelListActivity : BaseActivity() {
 
 
     private var selectedChannel:
+            LiveChannel? = null
+
+
+    /**
+     * The channel currently playing in the compact EPG preview. Focus may move
+     * around the guide without changing playback, so this is intentionally
+     * separate from [selectedChannel].
+     */
+    private var playingChannel:
             LiveChannel? = null
 
 
@@ -203,6 +226,35 @@ class EpgChannelListActivity : BaseActivity() {
 
 
 
+    private val playerListener =
+        object : Player.Listener {
+
+
+            override fun onPlaybackStateChanged(
+                playbackState: Int
+            ) {
+
+
+                binding.progressLoading.visibility =
+                    if (playbackState == Player.STATE_BUFFERING) {
+                        View.VISIBLE
+                    } else {
+                        View.GONE
+                    }
+            }
+
+
+            override fun onPlayerError(
+                error: PlaybackException
+            ) {
+                binding.progressLoading.visibility =
+                    View.GONE
+            }
+        }
+
+
+
+
 
 
 
@@ -234,6 +286,13 @@ class EpgChannelListActivity : BaseActivity() {
 
         prefs =
             PreferenceManager(this)
+
+
+        favoritesRepository =
+            FavoritesRepository(
+                DatabaseProvider.get(this).favoritesDao(),
+                FirebaseFirestore.getInstance()
+            )
 
 
 
@@ -283,6 +342,13 @@ class EpgChannelListActivity : BaseActivity() {
         )
 
 
+        // Match the Channel List and Favorites behaviour: touching the active
+        // preview opens the same full-screen PlayerActivity and its controls.
+        binding.playerView.setOnClickListener {
+            playingChannel?.let(::openFullscreen)
+        }
+
+
 
 
 
@@ -290,6 +356,10 @@ class EpgChannelListActivity : BaseActivity() {
 
 
             runOnUiThread {
+
+
+                binding.progressLoading.visibility =
+                    View.GONE
 
 
                 binding.txtEpgStatus.text =
@@ -1952,6 +2022,12 @@ class EpgChannelListActivity : BaseActivity() {
             }
 
 
+            setOnLongClickListener {
+                confirmToggleFavorite(channel)
+                true
+            }
+
+
 
 
 
@@ -2047,6 +2123,16 @@ class EpgChannelListActivity : BaseActivity() {
 
                     textSize =
                         15f
+
+
+                    // The title fills the row, so parent gravity alone does
+                    // not center it. Match the program cards on the right.
+                    gravity =
+                        Gravity.CENTER_VERTICAL
+
+
+                    includeFontPadding =
+                        false
 
 
 
@@ -2416,6 +2502,12 @@ class EpgChannelListActivity : BaseActivity() {
                         program
                     )
                 }
+
+
+                setOnLongClickListener {
+                    confirmToggleFavorite(channel)
+                    true
+                }
             }
 
 
@@ -2454,6 +2546,12 @@ class EpgChannelListActivity : BaseActivity() {
 
                 textSize =
                     14f
+
+
+                // Keep the program text on the same vertical center line as
+                // the sticky channel name for this row.
+                includeFontPadding =
+                    false
 
 
 
@@ -3032,8 +3130,18 @@ class EpgChannelListActivity : BaseActivity() {
     ) {
 
 
+        // First click starts/replaces the compact preview. A second click on
+        // the channel already playing opens the shared full-screen player.
+        if (playingChannel?.stream_id == channel.stream_id) {
+            openFullscreen(channel)
+            return
+        }
+
+
         selectedChannel =
             channel
+
+        LiveWatchHistory.record(applicationContext, channel)
 
 
 
@@ -3042,6 +3150,10 @@ class EpgChannelListActivity : BaseActivity() {
             program
         )
 
+
+
+        binding.progressLoading.visibility =
+            View.VISIBLE
 
 
         PlayerManager.play(
@@ -3054,6 +3166,10 @@ class EpgChannelListActivity : BaseActivity() {
                 channel
             )
         )
+
+
+        playingChannel =
+            channel
 
 
 
@@ -3069,6 +3185,128 @@ class EpgChannelListActivity : BaseActivity() {
 
             pendingFocusProgramKey =
                 "${channel.stream_id}|${program.startTimestamp}|${program.stopTimestamp}"
+        }
+    }
+
+
+    private fun openFullscreen(
+        channel: LiveChannel
+    ) {
+
+
+        val position = channels.indexOfFirst {
+            it.stream_id == channel.stream_id
+        }
+
+
+        if (position < 0) return
+
+
+        // PlayerActivity uses PlayerState for previous/next channel controls
+        // and MultiView. Populate it with this EPG category's channel list.
+        PlayerState.channels.clear()
+        PlayerState.channels.addAll(channels)
+        PlayerState.currentPosition = position
+
+
+        playingChannel =
+            channel
+
+
+        expectingFullscreenReturn =
+            true
+
+
+        PlayerManager.play(
+            this,
+            binding.playerView,
+            buildStreamUrl(channel)
+        )
+
+
+        startActivity(
+            Intent(
+                this,
+                PlayerActivity::class.java
+            )
+        )
+    }
+
+
+    private fun confirmToggleFavorite(
+        channel: LiveChannel
+    ) {
+        val streamId = channel.stream_id?.toString() ?: return
+
+        lifecycleScope.launch {
+            val isFavorite = withContext(Dispatchers.IO) {
+                DatabaseProvider
+                    .get(this@EpgChannelListActivity)
+                    .favoritesDao()
+                    .getAll()
+                    .any { it.key == "LIVE_CHANNEL:$streamId" }
+            }
+
+            val channelName = channel.name ?: "this channel"
+            val action = if (isFavorite) "remove" else "add"
+
+            AlertDialog.Builder(this@EpgChannelListActivity)
+                .setTitle("Favorites")
+                .setMessage("Do you want to $action $channelName ${if (isFavorite) "from" else "to"} Favorites?")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton(if (isFavorite) "Remove" else "Add") { _, _ ->
+                    toggleChannelFavorite(channel)
+                }
+                .show()
+        }
+    }
+
+
+    private fun toggleChannelFavorite(
+        channel: LiveChannel
+    ) {
+        val streamId = channel.stream_id?.toString() ?: return
+
+        lifecycleScope.launch {
+            val isFavorite = withContext(Dispatchers.IO) {
+                DatabaseProvider
+                    .get(this@EpgChannelListActivity)
+                    .favoritesDao()
+                    .getAll()
+                    .any { it.key == "LIVE_CHANNEL:$streamId" }
+            }
+
+            try {
+                if (isFavorite) {
+                    favoritesRepository.removeFavorite(
+                        prefs.getUsername(),
+                        "LIVE_CHANNEL",
+                        streamId
+                    )
+                    Toast.makeText(
+                        this@EpgChannelListActivity,
+                        "${channel.name ?: "Channel"} removed from Favorites",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                } else {
+                    favoritesRepository.addFavorite(
+                        prefs.getUsername(),
+                        "LIVE_CHANNEL",
+                        streamId
+                    )
+                    Toast.makeText(
+                        this@EpgChannelListActivity,
+                        "${channel.name ?: "Channel"} added to Favorites",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            } catch (_: Exception) {
+                Toast.makeText(
+                    this@EpgChannelListActivity,
+                    "Could not update Favorites",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
         }
     }
 
@@ -3233,9 +3471,9 @@ class EpgChannelListActivity : BaseActivity() {
             )
 
                 Color.rgb(
-                    42,
-                    34,
-                    88
+                    81,
+                    45,
+                    49
                 )
 
             else if (
@@ -3243,17 +3481,17 @@ class EpgChannelListActivity : BaseActivity() {
             )
 
                 Color.rgb(
-                    34,
-                    32,
-                    68
+                    58,
+                    37,
+                    40
                 )
 
             else
 
                 Color.rgb(
-                    18,
-                    18,
-                    45
+                    30,
+                    30,
+                    30
                 )
 
 
@@ -3266,9 +3504,9 @@ class EpgChannelListActivity : BaseActivity() {
             )
 
                 Color.rgb(
-                    255,
-                    193,
-                    7
+                    215,
+                    25,
+                    32
                 )
 
             else if (
@@ -3276,17 +3514,17 @@ class EpgChannelListActivity : BaseActivity() {
             )
 
                 Color.rgb(
-                    120,
-                    130,
+                    255,
+                    255,
                     255
                 )
 
             else
 
                 Color.rgb(
-                    55,
-                    58,
-                    100
+                    48,
+                    48,
+                    48
                 )
 
 
@@ -3475,6 +3713,34 @@ class EpgChannelListActivity : BaseActivity() {
 
                 binding.playerView
             )
+
+
+            binding.playerView.player?.let { player ->
+                player.addListener(playerListener)
+                binding.progressLoading.visibility =
+                    if (player.playbackState == Player.STATE_BUFFERING) {
+                        View.VISIBLE
+                    } else {
+                        View.GONE
+                    }
+            }
+
+
+            if (expectingFullscreenReturn) {
+                expectingFullscreenReturn = false
+
+
+                PlayerState.currentChannel()?.let { channel ->
+                    playingChannel = channel
+                    updateTopInfo(channel)
+                    pendingFocusChannelId = channel.stream_id
+                }
+            }
+
+
+            if (playingChannel != null) {
+                PlayerManager.resume()
+            }
         }
     }
 
@@ -3484,6 +3750,14 @@ class EpgChannelListActivity : BaseActivity() {
 
 
 
+
+
+    override fun onPause() {
+        binding.playerView.player
+            ?.removeListener(playerListener)
+
+        super.onPause()
+    }
 
 
     override fun onDestroy() {

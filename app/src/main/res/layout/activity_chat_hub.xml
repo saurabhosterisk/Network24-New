@@ -4,7 +4,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#0E1320"
+    android:background="@drawable/bg_dashboard"
     android:padding="12dp">
 
     <TextView
@@ -75,7 +75,7 @@
             android:paddingEnd="6dp"
             android:paddingTop="5dp"
             android:paddingBottom="5dp"
-            android:background="#151B2C"
+            android:background="@color/card"
             android:visibility="gone">
 
             <TextView
@@ -113,7 +113,7 @@
                 android:layout_weight="1"
                 android:hint="Type a message (use @username to mention)"
                 android:textColor="#FFFFFF"
-                android:background="#151B2C"
+                android:background="@drawable/bg_interactive_chip"
                 android:paddingStart="12dp"
                 android:paddingEnd="12dp"
                 android:inputType="textCapSentences|textMultiLine"
@@ -124,7 +124,9 @@
                 android:layout_width="wrap_content"
                 android:layout_height="48dp"
                 android:layout_marginStart="10dp"
+                android:background="@drawable/bg_primary_action"
                 android:text="SEND"
+                android:textColor="@color/text_primary"
                 android:focusable="true"/>
         </LinearLayout>
     </LinearLayout>

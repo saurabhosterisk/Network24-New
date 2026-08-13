@@ -6,6 +6,12 @@ import com.network24.player.common.models.LoginCredentials
 
 class PreferenceManager(context: Context) {
 
+    enum class AutoReconnectMode {
+        OFF,
+        STANDARD,
+        FAST
+    }
+
     private val prefs: SharedPreferences =
         context.getSharedPreferences("network24", Context.MODE_PRIVATE)
 
@@ -24,6 +30,7 @@ class PreferenceManager(context: Context) {
         private const val KEY_LAST_SYNC_TIME = "last_sync_time"
         private const val KEY_DISABLED_CATEGORIES = "disabled_live_category_ids"
         private const val KEY_DISABLED_CATEGORIES_CACHED = "disabled_live_category_ids_cached"
+        private const val KEY_AUTO_RECONNECT_MODE = "auto_reconnect_mode"
 
         // Chat
         private const val KEY_CHAT_LAST_ROOM_ID = "chat_last_room_id"
@@ -141,6 +148,23 @@ class PreferenceManager(context: Context) {
     fun getDisabledLiveCategoryIds(): Set<String>? {
         if (!prefs.getBoolean(KEY_DISABLED_CATEGORIES_CACHED, false)) return null
         return prefs.getStringSet(KEY_DISABLED_CATEGORIES, emptySet())?.toSet() ?: emptySet()
+    }
+
+    // -------------------------
+    // Playback preferences
+    // -------------------------
+
+    fun setAutoReconnectMode(mode: AutoReconnectMode) {
+        prefs.edit().putString(KEY_AUTO_RECONNECT_MODE, mode.name).apply()
+    }
+
+    fun getAutoReconnectMode(): AutoReconnectMode {
+        val storedMode = prefs.getString(
+            KEY_AUTO_RECONNECT_MODE,
+            AutoReconnectMode.STANDARD.name
+        )
+        return AutoReconnectMode.entries.firstOrNull { it.name == storedMode }
+            ?: AutoReconnectMode.STANDARD
     }
 
     // -------------------------

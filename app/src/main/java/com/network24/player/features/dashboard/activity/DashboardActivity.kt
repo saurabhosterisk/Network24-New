@@ -21,15 +21,21 @@ import androidx.appcompat.app.AlertDialog
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.drawerlayout.widget.DrawerLayout
+import androidx.lifecycle.lifecycleScope
 import com.google.android.material.internal.NavigationMenuView
 import com.google.android.material.card.MaterialCardView
 import com.network24.player.R
 import com.network24.player.core.base.BaseActivity
 import com.network24.player.core.preferences.PreferenceManager
+import com.network24.player.core.sync.SyncManager
+import com.network24.player.core.sync.SyncResult
 import com.network24.player.databinding.ActivityDashboardBinding
 import com.network24.player.features.chat.activity.ChatHubActivity
 import com.network24.player.features.live.activity.FavoriteChannelsActivity
 import com.network24.player.features.live.activity.LiveCategoryActivity
+import com.network24.player.features.live.activity.MasterChannelSearchActivity
+import com.network24.player.features.live.activity.ProgramSearchActivity
+import com.network24.player.features.live.activity.RecentlyWatchedActivity
 import com.network24.player.features.live.repository.LiveRepository
 import com.network24.player.features.live.repository.SyncCallback
 import com.network24.player.features.login.activity.LoginActivity
@@ -41,6 +47,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.launch
 
 class DashboardActivity : BaseActivity() {
     private companion object { private const val REQ_POST_NOTIFICATIONS = 9001; private const val PAYMENT_URL = "https://osterisktechnology.com/makepayment.html"; private const val CINEMA_PRO_3_PACKAGE = "com.infahash.fvision.cpro3" }
@@ -63,14 +70,14 @@ class DashboardActivity : BaseActivity() {
 
     private fun setupDashboardCardInteractions() {
         val cards = listOf(binding.cardLiveTv, binding.cardFavorites, binding.cardNotification, binding.cardSupport, binding.cardSettings, binding.cardLiveEvents)
-        val cardColor = ContextCompat.getColor(this, R.color.card); val density = resources.displayMetrics.density; val normalElevation = 3f * density; val focusedElevation = 7f * density; val focusedStroke = (1f * density).toInt()
+        val cardColor = ContextCompat.getColor(this, R.color.card); val focusedCardColor = ContextCompat.getColor(this, R.color.selection_surface); val density = resources.displayMetrics.density; val normalElevation = 3f * density; val focusedElevation = 7f * density; val focusedStroke = (2f * density).toInt()
         cards.forEach { card ->
             card.isFocusable = true; card.isClickable = true; card.strokeWidth = 0; card.strokeColor = Color.TRANSPARENT; card.cardElevation = normalElevation; enlargeDashboardIcons(card, 42)
-            card.setOnFocusChangeListener { view, hasFocus -> val materialCard = view as MaterialCardView; if (hasFocus) { materialCard.setCardBackgroundColor(cardColor); materialCard.strokeWidth = focusedStroke; materialCard.strokeColor = Color.WHITE; materialCard.cardElevation = focusedElevation } else { materialCard.setCardBackgroundColor(cardColor); materialCard.strokeWidth = 0; materialCard.strokeColor = Color.TRANSPARENT; materialCard.cardElevation = normalElevation } }
+            card.setOnFocusChangeListener { view, hasFocus -> val materialCard = view as MaterialCardView; if (hasFocus) { materialCard.setCardBackgroundColor(focusedCardColor); materialCard.strokeWidth = focusedStroke; materialCard.strokeColor = Color.WHITE; materialCard.cardElevation = focusedElevation } else { materialCard.setCardBackgroundColor(cardColor); materialCard.strokeWidth = 0; materialCard.strokeColor = Color.TRANSPARENT; materialCard.cardElevation = normalElevation } }
         }
     }
     private fun enlargeDashboardIcons(card: ViewGroup, sizeDp: Int) { val sizePx = (sizeDp * resources.displayMetrics.density).toInt(); for (index in 0 until card.childCount) when (val child = card.getChildAt(index)) { is ImageView -> { child.layoutParams = child.layoutParams.apply { width = sizePx; height = sizePx }; child.scaleType = ImageView.ScaleType.CENTER_INSIDE; child.requestLayout() }; is ViewGroup -> enlargeDashboardIcons(child, sizeDp) } }
-    private fun setupDrawerAndMenu() { binding.btnMore.setOnClickListener { openRightDrawer(binding.drawerLayout) }; setupOptionalRightDrawerMenu(binding.drawerLayout, binding.rightNav) { itemId -> when (itemId) { R.id.action_home -> { closeRightDrawer(binding.drawerLayout); true }; R.id.action_refresh_all -> { syncInitialData(true); true }; R.id.action_refresh_guide -> { refreshTvGuide(); true }; R.id.action_settings -> { startActivity(Intent(this, SettingsActivity::class.java)); true }; R.id.action_logout -> { prefs.clear(); startActivity(Intent(this, LoginActivity::class.java)); finishAffinity(); true }; else -> false } }; binding.drawerLayout.addDrawerListener(object : DrawerLayout.SimpleDrawerListener() { override fun onDrawerOpened(drawerView: View) { if (drawerView.id == binding.rightNav.id) binding.rightNav.post { val menuView = binding.rightNav.getChildAt(0) as? NavigationMenuView; if (menuView != null) for (i in 0 until menuView.childCount) { val child = menuView.getChildAt(i); if (child.isFocusable) { child.requestFocus(); break } } } } }) }
+    private fun setupDrawerAndMenu() { binding.btnMore.setOnClickListener { openRightDrawer(binding.drawerLayout) }; setupOptionalRightDrawerMenu(binding.drawerLayout, binding.rightNav) { itemId -> when (itemId) { R.id.action_home -> { closeRightDrawer(binding.drawerLayout); true }; R.id.action_recently_watched -> { startActivity(Intent(this, RecentlyWatchedActivity::class.java)); true }; R.id.action_refresh_all -> { syncInitialData(true); true }; R.id.action_refresh_guide -> { refreshTvGuide(); true }; R.id.action_search_guide -> { startActivity(Intent(this, ProgramSearchActivity::class.java)); true }; R.id.action_master_search -> { startActivity(Intent(this, MasterChannelSearchActivity::class.java)); true }; R.id.action_settings -> { startActivity(Intent(this, SettingsActivity::class.java)); true }; R.id.action_logout -> { prefs.clear(); startActivity(Intent(this, LoginActivity::class.java)); finishAffinity(); true }; else -> false } }; binding.drawerLayout.addDrawerListener(object : DrawerLayout.SimpleDrawerListener() { override fun onDrawerOpened(drawerView: View) { if (drawerView.id == binding.rightNav.id) binding.rightNav.post { val menuView = binding.rightNav.getChildAt(0) as? NavigationMenuView; if (menuView != null) for (i in 0 until menuView.childCount) { val child = menuView.getChildAt(i); if (child.isFocusable) { child.requestFocus(); break } } } } }) }
 
     private fun setClickListeners() {
         binding.cardLiveTv.setOnClickListener { startActivity(Intent(this, LiveCategoryActivity::class.java)) }
@@ -84,6 +91,62 @@ class DashboardActivity : BaseActivity() {
 
     private fun openCinemaPro3() { val launchIntent = packageManager.getLaunchIntentForPackage(CINEMA_PRO_3_PACKAGE); if (launchIntent != null) { launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); try { startActivity(launchIntent) } catch (_: Exception) { Toast.makeText(this, "Unable to open Cinema Pro 3.", Toast.LENGTH_SHORT).show() } } else Toast.makeText(this, "Cinema Pro 3 is not installed on this device.", Toast.LENGTH_LONG).show() }
     private fun showRenewPaymentQr() { val qrSize = 720; val matrix: BitMatrix = MultiFormatWriter().encode(PAYMENT_URL, BarcodeFormat.QR_CODE, qrSize, qrSize); val pixels = IntArray(qrSize * qrSize); for (y in 0 until qrSize) { val offset = y * qrSize; for (x in 0 until qrSize) pixels[offset + x] = if (matrix[x, y]) Color.BLACK else Color.WHITE }; val qrBitmap = Bitmap.createBitmap(pixels, 0, qrSize, qrSize, qrSize, Bitmap.Config.ARGB_8888); val container = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL; setPadding(28, 8, 28, 12) }; val instruction = TextView(this).apply { text = "Renew your subscription in just a few steps"; gravity = Gravity.CENTER; textSize = 18f; setTextColor(Color.rgb(30, 30, 30)); setTypeface(typeface, android.graphics.Typeface.BOLD); setPadding(0, 4, 0, 10) }; val steps = TextView(this).apply { text = "1. Open your phone's camera.\n2. Point the camera at the QR code below.\n3. Tap the link that appears on your phone.\n4. Follow the instructions on the payment page to renew your subscription."; gravity = Gravity.CENTER; textSize = 15f; setTextColor(Color.DKGRAY); setLineSpacing(2f, 1.05f); setPadding(8, 0, 8, 10) }; val imageView = ImageView(this).apply { setImageBitmap(qrBitmap); adjustViewBounds = true; setPadding(8, 8, 8, 12); contentDescription = "QR code to open the subscription payment page" }; val scanHint = TextView(this).apply { text = "📱 Scan this code with another phone to open the payment page."; gravity = Gravity.CENTER; textSize = 14f; setTextColor(Color.rgb(55, 55, 55)); setTypeface(typeface, android.graphics.Typeface.BOLD); setPadding(8, 2, 8, 8) }; container.addView(instruction); container.addView(steps); container.addView(imageView, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)); container.addView(scanHint); AlertDialog.Builder(this).setView(container).setNegativeButton("Close", null).setPositiveButton("Open Payment Page") { _, _ -> startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(PAYMENT_URL))) }.show() }
-    private fun syncInitialData(forceRefresh: Boolean = false) { if (!hasCredentials() || isInitialSyncRunning) return; val lastSyncTime = prefs.getLastSyncTime(); val currentTime = System.currentTimeMillis(); val twentyFourHoursInMillis = 24L * 60L * 60L * 1000L; val isFirstSync = lastSyncTime <= 0L; if (!forceRefresh && !isFirstSync && currentTime - lastSyncTime < twentyFourHoursInMillis) return; isInitialSyncRunning = true; runCallbackSyncWithLoader(loadingMessage = "Refreshing categories & channels…", successMessage = "Channels Updated Successfully!") { ok, fail -> repository.syncAllData(server = prefs.getServer(), username = prefs.getUsername(), password = prefs.getPassword(), callback = object : SyncCallback { override fun onSuccess() { isInitialSyncRunning = false; prefs.setLastSyncTime(System.currentTimeMillis()); ok() }; override fun onError(message: String) { isInitialSyncRunning = false; fail("Failed to update: $message") } }) } }
+    private fun syncInitialData(forceRefresh: Boolean = false) {
+        if (!hasCredentials() || isInitialSyncRunning) return
+
+        val lastSyncTime = prefs.getLastSyncTime()
+        val currentTime = System.currentTimeMillis()
+        val twentyFourHoursInMillis = 24L * 60L * 60L * 1000L
+        val isFirstSync = lastSyncTime <= 0L
+        val isScheduledSyncDue = isFirstSync ||
+            currentTime - lastSyncTime >= twentyFourHoursInMillis
+
+        if (!forceRefresh && !isScheduledSyncDue) {
+            return
+        }
+
+        isInitialSyncRunning = true
+        val refreshFullEpg = isScheduledSyncDue
+
+        runCallbackSyncWithLoader(
+            loadingMessage = "Refreshing categories & channels…",
+            successMessage = "Channels Updated Successfully!"
+        ) { ok, fail ->
+            repository.syncAllData(
+                server = prefs.getServer(),
+                username = prefs.getUsername(),
+                password = prefs.getPassword(),
+                callback = object : SyncCallback {
+                    override fun onSuccess() {
+                        isInitialSyncRunning = false
+                        prefs.setLastSyncTime(System.currentTimeMillis())
+                        ok()
+
+                        if (refreshFullEpg) {
+                            refreshInitialEpgInBackground()
+                        }
+                    }
+
+                    override fun onError(message: String) {
+                        isInitialSyncRunning = false
+                        fail("Failed to update: $message")
+                    }
+                }
+            )
+        }
+    }
+
+    private fun refreshInitialEpgInBackground() {
+        lifecycleScope.launch {
+            when (val result = SyncManager(this@DashboardActivity).syncFullEpg(force = true)) {
+                SyncResult.Success -> sendBroadcast(Intent(ACTION_EPG_UPDATED))
+                is SyncResult.Error -> android.util.Log.w(
+                    "N24_SYNC",
+                    "Initial TV Guide refresh failed: ${result.message}"
+                )
+            }
+        }
+    }
+
     override fun onDestroy() { super.onDestroy(); handler.removeCallbacks(clockRunnable) }
 }

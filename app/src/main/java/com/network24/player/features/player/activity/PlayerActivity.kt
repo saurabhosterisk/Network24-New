@@ -24,6 +24,7 @@ import com.network24.player.R
 import com.network24.player.core.base.BaseActivity
 import com.network24.player.core.preferences.PreferenceManager
 import com.network24.player.databinding.ActivityPlayerBinding
+import com.network24.player.features.live.history.LiveWatchHistory
 import com.network24.player.features.live.models.LiveChannel
 import com.network24.player.features.live.repository.LiveRepository
 import com.network24.player.features.player.manager.PlayerManager
@@ -40,6 +41,10 @@ import java.util.Locale
 import androidx.media3.common.TrackSelectionOverride
 
 class PlayerActivity : BaseActivity() {
+
+    companion object {
+        const val EXTRA_PLAY_SELECTED_CHANNEL = "play_selected_channel"
+    }
 
 
     private lateinit var binding: ActivityPlayerBinding
@@ -329,6 +334,10 @@ class PlayerActivity : BaseActivity() {
             binding.playerView
         )
 
+        if (intent.getBooleanExtra(EXTRA_PLAY_SELECTED_CHANNEL, false)) {
+            PlayerState.currentChannel()?.let(::switchToChannel)
+        }
+
 
         onBackPressedDispatcher.addCallback(this) {
 
@@ -576,15 +585,18 @@ class PlayerActivity : BaseActivity() {
         binding.btnReportChannel.setOnClickListener {
 
 
-            val name =
+            val reportedChannel =
                 PlayerState.currentChannel()
+
+            val name =
+                reportedChannel
                     ?.name
                     ?: "Unknown Channel"
 
 
 
             val data =
-                hashMapOf(
+                hashMapOf<String, Any>(
 
                     "senderId" to "system_bot",
 
@@ -596,6 +608,14 @@ class PlayerActivity : BaseActivity() {
                     "ts" to
                             com.google.firebase.firestore.FieldValue.serverTimestamp()
                 )
+
+            reportedChannel?.stream_id?.let { streamId ->
+                data["channelStreamId"] = streamId
+            }
+
+            reportedChannel?.name?.takeIf { it.isNotBlank() }?.let { channelName ->
+                data["channelName"] = channelName
+            }
 
 
 
@@ -1057,6 +1077,8 @@ class PlayerActivity : BaseActivity() {
     private fun switchToChannel(
         channel: LiveChannel
     ) {
+
+        LiveWatchHistory.record(applicationContext, channel)
 
 
 

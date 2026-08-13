@@ -1,11 +1,13 @@
 package com.network24.player.features.live.repository
 
 import android.content.Context
+import androidx.sqlite.db.SimpleSQLiteQuery
 import com.network24.player.core.cache.memory.CacheKeys as MemKeys
 import com.network24.player.core.cache.memory.CacheTtl
 import com.network24.player.core.cache.memory.MemoryCache
 import com.network24.player.core.database.DatabaseProvider
 import com.network24.player.core.database.entity.CategoryType
+import com.network24.player.core.database.entity.MasterChannelSearchResult
 import com.network24.player.core.database.mapper.toLiveCategory
 import com.network24.player.core.database.mapper.toLiveChannel
 import com.network24.player.core.database.mapper.toEpgListing
@@ -18,6 +20,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.Locale
 
 class LiveRepository(private val context: Context) {
 
@@ -113,6 +116,100 @@ class LiveRepository(private val context: Context) {
 
         MemoryCache.put(memKey, fresh, CacheTtl.CHANNELS_MS)
         return fresh
+    }
+
+    /**
+     * Searches the persisted live-channel catalogue across every category.
+     * Matching and ranking are performed by SQLite; only result rows are
+     * returned to the UI.
+     */
+    suspend fun searchAllLiveChannels(rawQuery: String): List<MasterChannelSearchResult> {
+        val tokens = rawQuery
+            .lowercase(Locale.ROOT)
+            .split(Regex("[^\\p{L}\\p{N}]+"))
+            .filter { it.isNotBlank() }
+
+        if (tokens.isEmpty()) return emptyList()
+
+        val hasLiveCategories = db.categoryDao()
+            .getByType(CategoryType.LIVE)
+            .isNotEmpty()
+        if (!hasLiveCategories) {
+            val categorySync = sync.syncLiveCategories(force = true)
+            if (categorySync is SyncResult.Error) throw Exception(categorySync.message)
+        }
+
+        if (db.channelDao().countAll() == 0) {
+            val channelSync = sync.syncLiveChannelsAll(force = true)
+            if (channelSync is SyncResult.Error) throw Exception(channelSync.message)
+        }
+
+        return db.channelDao().searchAllLiveChannels(
+            buildMasterSearchQuery(tokens)
+        )
+    }
+
+    private fun buildMasterSearchQuery(tokens: List<String>): SimpleSQLiteQuery {
+        val normalizedName = listOf(
+            "' '", "'-'", "'_'", "'.'", "'/'", "'|'", "'&'",
+            "'('", "')'", "CHAR(39)", "':'", "','"
+        ).fold("LOWER(COALESCE(c.name, ''))") { expression, character ->
+            "REPLACE($expression, $character, '')"
+        }
+
+        val compactQuery = tokens.joinToString(separator = "")
+        val allWordsClause = tokens.joinToString(" AND ") {
+            "$normalizedName LIKE ?"
+        }
+        val anyWordsClause = tokens.joinToString(" OR ") {
+            "$normalizedName LIKE ?"
+        }
+
+        val sql = """
+            SELECT
+                c.streamId AS streamId,
+                c.name AS channelName,
+                c.categoryId AS categoryId,
+                COALESCE(cat.name, 'Uncategorized') AS categoryName,
+                c.icon AS icon,
+                c.streamType AS streamType,
+                c.epgChannelId AS epgChannelId,
+                c.tvArchive AS tvArchive,
+                c.tvArchiveDuration AS tvArchiveDuration,
+                c.directSource AS directSource,
+                c.num AS num,
+                c.added AS added,
+                c.customSid AS customSid,
+                EXISTS(
+                    SELECT 1 FROM favorites f
+                    WHERE f.itemType = 'LIVE_CHANNEL'
+                      AND f.itemId = CAST(c.streamId AS TEXT)
+                ) AS isFavorite
+            FROM channels c
+            LEFT JOIN categories cat ON cat.categoryId = c.categoryId
+                AND cat.type = 'LIVE'
+            WHERE c.name IS NOT NULL
+              AND TRIM(c.name) != ''
+              AND ($anyWordsClause)
+            ORDER BY
+                CASE
+                    WHEN $normalizedName = ? THEN 1
+                    WHEN $normalizedName LIKE ? THEN 2
+                    WHEN $allWordsClause THEN 3
+                    ELSE 4
+                END,
+                LENGTH(c.name) ASC,
+                c.name COLLATE NOCASE ASC
+            LIMIT 100
+        """.trimIndent()
+
+        val args = mutableListOf<Any>()
+        args.addAll(tokens.map { "%$it%" })
+        args.add(compactQuery)
+        args.add("$compactQuery%")
+        args.addAll(tokens.map { "%$it%" })
+
+        return SimpleSQLiteQuery(sql, args.toTypedArray())
     }
 
     suspend fun getShortEPG(

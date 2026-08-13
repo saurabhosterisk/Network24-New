@@ -15,10 +15,11 @@
     android:focusableInTouchMode="false"
     android:descendantFocusability="blocksDescendants"
     android:clickable="true"
-    app:cardBackgroundColor="@color/channel_card_background"
+    app:cardBackgroundColor="@color/interactive_card_background"
     app:cardCornerRadius="10dp"
     app:cardElevation="0dp"
-    app:strokeWidth="0dp">
+    app:strokeColor="@color/interactive_card_stroke"
+    app:strokeWidth="1dp">
 
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
@@ -31,7 +32,7 @@
             android:id="@+id/viewIndicator"
             android:layout_width="4dp"
             android:layout_height="34dp"
-            android:background="#3D8BFF"
+            android:background="@color/primary_light"
             android:visibility="gone"
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintBottom_toBottomOf="parent"
@@ -73,7 +74,7 @@
             android:layout_width="20dp"
             android:layout_height="20dp"
             android:src="@drawable/ic_favorite"
-            app:tint="#BB86FC"
+            app:tint="@color/primary_light"
             android:visibility="gone"
             app:layout_constraintEnd_toStartOf="@id/imgPlaying"
             app:layout_constraintTop_toTopOf="parent"
@@ -87,7 +88,7 @@
             android:layout_height="20dp"
             android:visibility="gone"
             android:src="@drawable/ic_play"
-            android:tint="#3D8BFF"
+            android:tint="@color/primary_light"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintBottom_toBottomOf="parent"/>

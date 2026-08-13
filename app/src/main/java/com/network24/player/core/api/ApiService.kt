@@ -8,6 +8,7 @@ import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.GET
 import retrofit2.http.Query
+import retrofit2.http.Streaming
 
 interface ApiService {
 
@@ -48,6 +49,7 @@ interface ApiService {
     ): Response<ShortEPGResponse>
 
     @GET("xmltv.php")
+    @Streaming
     suspend fun getXmlTv(
         @Query("username") username: String,
         @Query("password") password: String

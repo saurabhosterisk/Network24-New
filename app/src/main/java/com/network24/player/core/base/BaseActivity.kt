@@ -23,7 +23,6 @@ import com.google.android.material.navigation.NavigationView
 import com.network24.player.R
 import com.network24.player.core.sync.SyncManager
 import com.network24.player.core.sync.SyncResult
-import com.network24.player.features.live.activity.ManageCategoriesActivity
 import kotlinx.coroutines.launch
 
 open class BaseActivity : AppCompatActivity() {
@@ -60,12 +59,7 @@ open class BaseActivity : AppCompatActivity() {
         if (drawerLayout == null || navView == null) return
         navView.setNavigationItemSelectedListener { item ->
             drawerLayout.closeDrawer(GravityCompat.END)
-            if (item.itemId == R.id.action_manage_categories) {
-                startActivity(Intent(this, ManageCategoriesActivity::class.java))
-                true
-            } else {
-                onMenuClick(item.itemId)
-            }
+            onMenuClick(item.itemId)
         }
     }
 

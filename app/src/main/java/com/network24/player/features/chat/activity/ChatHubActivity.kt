@@ -3,6 +3,7 @@ package com.network24.player.features.chat.activity
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
@@ -14,6 +15,7 @@ import android.widget.PopupWindow
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.core.widget.doAfterTextChanged
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.firebase.firestore.FirebaseFirestore
@@ -21,6 +23,8 @@ import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
 import com.network24.player.R
 import com.network24.player.core.base.BaseActivity
+import com.network24.player.core.database.DatabaseProvider
+import com.network24.player.core.database.mapper.toLiveChannel
 import com.network24.player.core.preferences.PreferenceManager
 import com.network24.player.databinding.ActivityChatHubBinding
 import com.network24.player.features.chat.adapter.ChatMessagesAdapter
@@ -29,6 +33,11 @@ import com.network24.player.features.chat.adapter.MentionAdapter
 import com.network24.player.features.chat.model.ChatRoom
 import com.network24.player.features.chat.repo.ChatMessage
 import com.network24.player.features.chat.repo.ChatRepository
+import com.network24.player.features.player.activity.PlayerActivity
+import com.network24.player.features.player.state.PlayerState
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class ChatHubActivity : BaseActivity() {
     private lateinit var binding: ActivityChatHubBinding
@@ -65,7 +74,8 @@ class ChatHubActivity : BaseActivity() {
             mySenderId = senderId,
             onReply = { beginReply(it) },
             onMessageMenu = { showMessageActions(it) },
-            onReaction = { message, emoji -> if (emoji == "__picker__") showReactionPicker(message) else toggleReaction(message, emoji) }
+            onReaction = { message, emoji -> if (emoji == "__picker__") showReactionPicker(message) else toggleReaction(message, emoji) },
+            onReportedChannelClick = { message -> openReportedChannel(message) }
         )
         binding.rvMessages.layoutManager = LinearLayoutManager(this).apply { stackFromEnd = true }
         binding.rvMessages.adapter = messagesAdapter
@@ -157,6 +167,48 @@ class ChatHubActivity : BaseActivity() {
         val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         clipboard.setPrimaryClip(ClipData.newPlainText("Chat message", message.text))
         Toast.makeText(this, "Message copied", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun openReportedChannel(message: ChatMessage) {
+        val reportedName = message.reportedChannelName?.trim()
+            ?.takeIf { it.isNotEmpty() }
+            ?: Regex("""channel ['\"](.+?)['\"]""", RegexOption.IGNORE_CASE)
+                .find(message.text)
+                ?.groupValues
+                ?.getOrNull(1)
+                ?.trim()
+                .orEmpty()
+        if (message.reportedChannelStreamId == null && reportedName.isEmpty()) return
+
+        lifecycleScope.launch {
+            val channel = withContext(Dispatchers.IO) {
+                val channelDao = DatabaseProvider.get(this@ChatHubActivity).channelDao()
+                val byStreamId = message.reportedChannelStreamId
+                    ?.let { streamId -> channelDao.getByStreamIds(listOf(streamId)).firstOrNull() }
+
+                (byStreamId ?: reportedName.takeIf { it.isNotEmpty() }?.let { name ->
+                    channelDao.getAll().firstOrNull { it.name?.trim().equals(name, ignoreCase = true) }
+                })?.toLiveChannel()
+            }
+
+            if (channel == null) {
+                Toast.makeText(
+                    this@ChatHubActivity,
+                    "This channel is no longer available in the current channel list.",
+                    Toast.LENGTH_SHORT
+                ).show()
+                return@launch
+            }
+
+            PlayerState.channels.clear()
+            PlayerState.channels.add(channel)
+            PlayerState.currentPosition = 0
+
+            startActivity(
+                Intent(this@ChatHubActivity, PlayerActivity::class.java)
+                    .putExtra(PlayerActivity.EXTRA_PLAY_SELECTED_CHANNEL, true)
+            )
+        }
     }
 
     private fun reportMessage(room: ChatRoom, message: ChatMessage) {

@@ -26,6 +26,7 @@ import com.network24.player.databinding.ActivityFavoriteChannelsBinding
 
 import com.network24.player.features.dashboard.activity.DashboardActivity
 import com.network24.player.features.live.adapter.ChannelAdapter
+import com.network24.player.features.live.history.LiveWatchHistory
 import com.network24.player.features.live.models.LiveChannel
 import com.network24.player.features.live.repository.LiveRepository
 import com.network24.player.features.live.repository.SyncCallback
@@ -1023,6 +1024,8 @@ class FavoriteChannelsActivity : BaseActivity() {
         channel: LiveChannel
     ) {
 
+        LiveWatchHistory.record(applicationContext, channel)
+
 
 
         binding.txtPlayerError.visibility =
@@ -1290,6 +1293,18 @@ class FavoriteChannelsActivity : BaseActivity() {
 
                 }
 
+                R.id.action_recently_watched -> {
+
+                    startActivity(
+                        Intent(
+                            this,
+                            RecentlyWatchedActivity::class.java
+                        )
+                    )
+
+                    true
+                }
+
 
 
 
@@ -1329,6 +1344,46 @@ class FavoriteChannelsActivity : BaseActivity() {
 
                 }
 
+
+
+
+
+                R.id.action_search_guide -> {
+
+
+
+                    startActivity(
+                        Intent(
+                            this@FavoriteChannelsActivity,
+                            ProgramSearchActivity::class.java
+                        )
+                    )
+
+
+
+                    true
+
+                }
+
+
+
+
+                R.id.action_master_search -> {
+
+
+
+                    startActivity(
+                        Intent(
+                            this@FavoriteChannelsActivity,
+                            MasterChannelSearchActivity::class.java
+                        )
+                    )
+
+
+
+                    true
+
+                }
 
 
 

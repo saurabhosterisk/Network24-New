@@ -8,8 +8,8 @@
     android:layout_height="84dp"
     android:layout_marginHorizontal="8dp"
 
-    app:cardBackgroundColor="#33000000"
-    app:strokeColor="@android:color/transparent"
+    app:cardBackgroundColor="@color/interactive_card_background"
+    app:strokeColor="@color/interactive_card_stroke"
 
 
     android:focusable="true"
@@ -20,7 +20,7 @@
 
     app:cardCornerRadius="14dp"
     app:cardElevation="6dp"
-    app:strokeWidth="0dp">
+    app:strokeWidth="1dp">
 
     <LinearLayout
         android:layout_width="match_parent"

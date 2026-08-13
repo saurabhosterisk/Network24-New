@@ -2,24 +2,24 @@
 <!-- Ye ek selector hai jo button ki state (focused ya normal) ke hisab se background badlega -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- 1. JAB TV REMOTE SE BUTTON PAR FOCUS AAYEGA -->
-    <item android:state_focused="true">
-        <shape android:shape="oval">
-            <!-- Focus aane par ye semi-transparent white/grey circle ban jayega -->
-            <solid android:color="#4DFFFFFF" />
-            <!-- Ek patli si white outline (stroke) -->
-            <stroke android:width="2dp" android:color="#FFFFFF" />
-        </shape>
-    </item>
-
-    <!-- 2. JAB BUTTON DABAYA JAYEGA (Pressed State) -->
     <item android:state_pressed="true">
         <shape android:shape="oval">
-            <solid android:color="#80FFFFFF" /> <!-- Click karne par thoda aur dark white hoga -->
+            <solid android:color="@color/selection_surface_pressed" />
+            <stroke android:width="2dp" android:color="@color/selection_stroke" />
         </shape>
     </item>
-
-    <!-- 3. NORMAL STATE (Koi focus nahi, koi click nahi) -->
+    <item android:state_hovered="true">
+        <shape android:shape="oval">
+            <solid android:color="@color/selection_surface" />
+            <stroke android:width="2dp" android:color="@color/selection_stroke" />
+        </shape>
+    </item>
+    <item android:state_focused="true">
+        <shape android:shape="oval">
+            <solid android:color="@color/selection_surface" />
+            <stroke android:width="2dp" android:color="@color/selection_stroke" />
+        </shape>
+    </item>
     <item>
         <shape android:shape="oval">
             <!-- Normal state mein background poori tarah transparent rahega -->

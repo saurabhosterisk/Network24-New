@@ -147,9 +147,11 @@ class LiveCategoryActivity : BaseActivity() {
         setupOptionalRightDrawerMenu(binding.drawerLayout, binding.rightNav) { itemId ->
             when (itemId) {
                 R.id.action_home -> { startActivity(Intent(this, DashboardActivity::class.java)); finish(); true }
-                R.id.action_manage_categories -> { startActivity(Intent(this, ManageCategoriesActivity::class.java)); true }
+            R.id.action_recently_watched -> { startActivity(Intent(this, RecentlyWatchedActivity::class.java)); true }
                 R.id.action_refresh_all -> { forceRefreshData(); true }
                 R.id.action_refresh_guide -> { refreshTvGuide(); true }
+                R.id.action_search_guide -> { startActivity(Intent(this, ProgramSearchActivity::class.java)); true }
+                R.id.action_master_search -> { startActivity(Intent(this, MasterChannelSearchActivity::class.java)); true }
                 R.id.action_settings -> { startActivity(Intent(this, SettingsActivity::class.java)); true }
                 R.id.action_logout -> { prefs.clear(); startActivity(Intent(this, LoginActivity::class.java)); finishAffinity(); true }
                 else -> false

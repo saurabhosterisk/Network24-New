@@ -49,8 +49,8 @@ class EpgDrawerMenuBinder @JvmOverloads constructor(
                     activity.finish()
                     true
                 }
-                R.id.action_manage_categories -> {
-                    activity.startActivity(Intent(activity, ManageCategoriesActivity::class.java))
+                R.id.action_recently_watched -> {
+                    activity.startActivity(Intent(activity, RecentlyWatchedActivity::class.java))
                     true
                 }
                 R.id.action_refresh_all -> {
@@ -59,6 +59,14 @@ class EpgDrawerMenuBinder @JvmOverloads constructor(
                 }
                 R.id.action_refresh_guide -> {
                     refreshGuide(activity)
+                    true
+                }
+                R.id.action_search_guide -> {
+                    activity.startActivity(Intent(activity, ProgramSearchActivity::class.java))
+                    true
+                }
+                R.id.action_master_search -> {
+                    activity.startActivity(Intent(activity, MasterChannelSearchActivity::class.java))
                     true
                 }
                 R.id.action_settings -> {

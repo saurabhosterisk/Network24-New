@@ -60,23 +60,8 @@ class FavoriteCategoryAdapter(
             true
         }
 
-        // Focus selector animation
         holder.itemView.setOnFocusChangeListener { _, hasFocus ->
-            if (hasFocus) {
-                holder.binding.cardFavorite.strokeWidth = 3
-                holder.itemView.animate()
-                    .scaleX(1.05f)
-                    .scaleY(1.05f)
-                    .setDuration(120)
-                    .start()
-            } else {
-                holder.binding.cardFavorite.strokeWidth = 0
-                holder.itemView.animate()
-                    .scaleX(1f)
-                    .scaleY(1f)
-                    .setDuration(120)
-                    .start()
-            }
+            holder.binding.cardFavorite.strokeWidth = dp(holder, if (hasFocus) 2 else 1)
         }
     }
 
@@ -84,5 +69,9 @@ class FavoriteCategoryAdapter(
         list.clear()
         list.addAll(newList)
         notifyDataSetChanged()
+    }
+
+    private fun dp(holder: ViewHolder, value: Int): Int {
+        return (value * holder.itemView.resources.displayMetrics.density).toInt()
     }
 }

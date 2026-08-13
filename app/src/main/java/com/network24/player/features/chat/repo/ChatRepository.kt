@@ -21,7 +21,9 @@ data class ChatMessage(
     val edited: Boolean = false,
     val editedAt: Timestamp? = null,
     val deleted: Boolean = false,
-    val deletedAt: Timestamp? = null
+    val deletedAt: Timestamp? = null,
+    val reportedChannelStreamId: Int? = null,
+    val reportedChannelName: String? = null
 )
 
 class ChatRepository(private val db: FirebaseFirestore = FirebaseFirestore.getInstance()) {
@@ -80,6 +82,6 @@ class ChatRepository(private val db: FirebaseFirestore = FirebaseFirestore.getIn
             val emoji = key as? String ?: return@mapNotNull null
             emoji to ((value as? List<*>)?.mapNotNull { it as? String } ?: emptyList())
         }.toMap()
-        return ChatMessage(id = id, text = text, senderId = getString("senderId") ?: "", senderName = getString("senderName") ?: "", ts = getTimestamp("ts"), replyToMessageId = getString("replyToMessageId"), replyToSenderName = getString("replyToSenderName"), replyToText = getString("replyToText"), mentions = (get("mentions") as? List<*>)?.mapNotNull { it as? String } ?: emptyList(), reactions = reactions, edited = getBoolean("edited") == true, editedAt = getTimestamp("editedAt"), deleted = false)
+        return ChatMessage(id = id, text = text, senderId = getString("senderId") ?: "", senderName = getString("senderName") ?: "", ts = getTimestamp("ts"), replyToMessageId = getString("replyToMessageId"), replyToSenderName = getString("replyToSenderName"), replyToText = getString("replyToText"), mentions = (get("mentions") as? List<*>)?.mapNotNull { it as? String } ?: emptyList(), reactions = reactions, edited = getBoolean("edited") == true, editedAt = getTimestamp("editedAt"), deleted = false, reportedChannelStreamId = getLong("channelStreamId")?.toInt(), reportedChannelName = getString("channelName"))
     }
 }

@@ -5,6 +5,7 @@ import android.app.Activity
 import android.app.Application
 import android.content.Context
 import android.content.Intent
+import android.os.SystemClock
 
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
@@ -16,6 +17,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 
 import com.network24.player.core.net.StreamDataSourceFactory
+import com.network24.player.core.preferences.PreferenceManager
 import com.network24.player.features.live.models.LiveChannel
 import com.network24.player.features.player.state.PlayerState
 
@@ -49,6 +51,17 @@ object PlayerManager {
     private var playbackSessionId = 0
 
     private var streamGeneration = 0
+
+
+    /**
+     * A Media3 error from the previous item can arrive while a rapid channel
+     * switch is replacing the media item. Keep enough request state to ignore
+     * those stale callbacks instead of treating the newly selected channel as
+     * down.
+     */
+    private var isReplacingMediaItem = false
+
+    private var streamRequestedAtMs = 0L
 
 
     /**
@@ -152,19 +165,27 @@ object PlayerManager {
     private const val LIVE_RECOVERY_WINDOW_MS =
         30000L
 
+    private const val FAST_LIVE_RECOVERY_WINDOW_MS =
+        15000L
+
+    private const val STREAM_SWITCH_SETTLE_MS =
+        750L
 
 
 
 
+
+    // Keep live streams responsive when switching channels while retaining a
+    // small buffer to absorb normal IPTV network variation.
     private val loadControl =
 
         DefaultLoadControl.Builder()
 
             .setBufferDurationsMs(
-                20000,
-                60000,
-                3000,
-                6000
+                5_000,
+                20_000,
+                1_000,
+                2_000
             )
 
             .build()
@@ -500,6 +521,13 @@ object PlayerManager {
 
                                         hasStartedPlaying = true
                                         playbackActuallyStarted = true
+
+                                        // A successful start proves that the
+                                        // active stream recovered. Do not keep
+                                        // showing an earlier error/retry state.
+                                        lastError = null
+                                        streamErrorType = StreamErrorType.NONE
+                                        cancelLiveRecovery()
                                     }
 
 
@@ -515,42 +543,7 @@ object PlayerManager {
                                 override fun onPlayerError(
                                     error: PlaybackException
                                 ) {
-
-                                    val errorSession = playbackSessionId
-
-                                    lastError =
-                                        error
-
-
-                                    streamErrorType =
-                                        when(error.errorCode) {
-
-                                            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
-                                            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ->
-                                                StreamErrorType.NETWORK
-
-
-                                            PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS,
-                                            PlaybackException.ERROR_CODE_DECODER_INIT_FAILED ->
-                                                StreamErrorType.SOURCE
-
-
-                                            else ->
-                                                StreamErrorType.UNKNOWN
-                                        }
-
-
-                                    playerScope.launch {
-
-                                        delay(500)
-
-                                        if (errorSession != playbackSessionId) {
-                                            return@launch
-                                        }
-
-                                        scheduleLiveChannelRecoveryIfNeeded()
-
-                                    }
+                                    handlePlayerError(error)
                                 }
                             }
                         )
@@ -713,11 +706,17 @@ object PlayerManager {
 
             streamGeneration++
 
+            streamRequestedAtMs =
+                SystemClock.elapsedRealtime()
+
             resetDiagnostics()
 
 
 
-            player.stop()
+            isReplacingMediaItem = true
+
+            try {
+                player.stop()
 
 
 
@@ -751,6 +750,9 @@ object PlayerManager {
 
 
             player.play()
+            } finally {
+                isReplacingMediaItem = false
+            }
         }
         else {
 
@@ -902,14 +904,74 @@ object PlayerManager {
 
 
 
+    private fun handlePlayerError(
+        error: PlaybackException
+    ) {
+
+        if (isReplacingMediaItem) return
+
+        val player = exoPlayer ?: return
+        val errorSession = playbackSessionId
+        val errorGeneration = streamGeneration
+        val errorUrl = currentUrl ?: return
+
+        playerScope.launch {
+            // Let a rapid channel switch settle. Media3 can dispatch the old
+            // item's error just after the next item is selected.
+            val elapsedSinceSwitch =
+                SystemClock.elapsedRealtime() - streamRequestedAtMs
+            val settleDelay =
+                (STREAM_SWITCH_SETTLE_MS - elapsedSinceSwitch)
+                    .coerceAtLeast(0L)
+
+            if (settleDelay > 0L) delay(settleDelay)
+
+            // Accept only an error that still belongs to the exact active
+            // request. A stale exception is cleared during the new prepare.
+            if (
+                playbackSessionId != errorSession ||
+                streamGeneration != errorGeneration ||
+                currentUrl != errorUrl ||
+                exoPlayer !== player ||
+                player.playerError !== error
+            ) {
+                return@launch
+            }
+
+            lastError = error
+            streamErrorType = when (error.errorCode) {
+                PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
+                PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ->
+                    StreamErrorType.NETWORK
+
+                PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS,
+                PlaybackException.ERROR_CODE_DECODER_INIT_FAILED ->
+                    StreamErrorType.SOURCE
+
+                else -> StreamErrorType.UNKNOWN
+            }
+
+            scheduleLiveChannelRecoveryIfNeeded()
+        }
+    }
+
+
     private fun scheduleLiveChannelRecoveryIfNeeded() {
 
         val recoverySession = playbackSessionId
 
-        val activity =
-            ownerActivityRef
-                ?.get()
-                ?: return
+        val ownerActivity = ownerActivityRef?.get() ?: return
+        val reconnectMode = PreferenceManager(
+            ownerActivity.applicationContext
+        ).getAutoReconnectMode()
+
+        if (reconnectMode == PreferenceManager.AutoReconnectMode.OFF) {
+            recoveryFailedListeners.forEach { listener ->
+                listener.invoke()
+            }
+            cancelLiveRecovery()
+            return
+        }
 
 
 
@@ -920,13 +982,31 @@ object PlayerManager {
         ) return
 
 
+        // Start the recovery window only after an error for the active stream
+        // has been accepted. Previously this stayed at zero, which made the
+        // first failure look as if its retry window had already expired.
+        if (liveRecoveryStartedAtMs == 0L) {
+            liveRecoveryStartedAtMs =
+                System.currentTimeMillis()
+        }
+
+
         val elapsed =
             System.currentTimeMillis() -
                     liveRecoveryStartedAtMs
 
-        if (
-            elapsed >= LIVE_RECOVERY_WINDOW_MS
-        ) {
+        val recoveryWindowMs = when (reconnectMode) {
+            PreferenceManager.AutoReconnectMode.STANDARD ->
+                LIVE_RECOVERY_WINDOW_MS
+
+            PreferenceManager.AutoReconnectMode.FAST ->
+                FAST_LIVE_RECOVERY_WINDOW_MS
+
+            PreferenceManager.AutoReconnectMode.OFF ->
+                return
+        }
+
+        if (elapsed >= recoveryWindowMs) {
 
             if (
                 recoverySession != playbackSessionId
@@ -955,15 +1035,24 @@ object PlayerManager {
 
 
 
-        val delayTime =
-            when(liveRecoveryAttempt) {
+        val delayTime = when (reconnectMode) {
+            PreferenceManager.AutoReconnectMode.STANDARD ->
+                when (liveRecoveryAttempt) {
+                    0 -> 3000L
+                    1 -> 5000L
+                    else -> 7000L
+                }
 
-                0 -> 3000L
+            PreferenceManager.AutoReconnectMode.FAST ->
+                when (liveRecoveryAttempt) {
+                    0 -> 1000L
+                    1 -> 2000L
+                    else -> 3000L
+                }
 
-                1 -> 5000L
-
-                else -> 7000L
-            }
+            PreferenceManager.AutoReconnectMode.OFF ->
+                return
+        }
 
 
 

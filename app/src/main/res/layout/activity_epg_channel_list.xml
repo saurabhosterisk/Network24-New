@@ -19,7 +19,7 @@
         android:layout_marginBottom="6dp"
         app:cardBackgroundColor="@color/card"
         app:cardCornerRadius="12dp"
-        app:strokeColor="#34315A"
+        app:strokeColor="@color/divider"
         app:strokeWidth="1dp"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintStart_toStartOf="parent"
@@ -47,7 +47,7 @@
                 android:layout_height="28dp"
                 android:layout_marginStart="4dp"
                 android:layout_marginEnd="12dp"
-                android:background="#7C4DFF" />
+                android:background="@color/primary_light" />
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
@@ -68,7 +68,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="1dp"
                     android:text="Live With EPG"
-                    android:textColor="#9B96C8"
+                    android:textColor="@color/text_hint"
                     android:textSize="11sp" />
             </LinearLayout>
             <ImageButton
@@ -97,7 +97,7 @@
         android:layout_marginBottom="8dp"
         app:cardBackgroundColor="@color/card"
         app:cardCornerRadius="12dp"
-        app:strokeColor="#34315A"
+        app:strokeColor="@color/divider"
         app:strokeWidth="1dp"
         app:layout_constraintTop_toBottomOf="@id/headerCard"
         app:layout_constraintStart_toStartOf="parent"
@@ -112,12 +112,21 @@
                 android:layout_width="0dp"
                 android:layout_height="0dp"
                 android:background="@android:color/black"
-                app:use_controller="true"
-                app:show_buffering="when_playing"
+                app:use_controller="false"
+                app:show_buffering="never"
                 app:layout_constraintWidth_percent="0.30"
                 app:layout_constraintTop_toTopOf="parent"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintStart_toStartOf="parent" />
+            <ProgressBar
+                android:id="@+id/progressLoading"
+                android:layout_width="42dp"
+                android:layout_height="42dp"
+                android:visibility="gone"
+                app:layout_constraintTop_toTopOf="@id/playerView"
+                app:layout_constraintBottom_toBottomOf="@id/playerView"
+                app:layout_constraintStart_toStartOf="@id/playerView"
+                app:layout_constraintEnd_toEndOf="@id/playerView" />
             <LinearLayout
                 android:id="@+id/infoPanel"
                 android:layout_width="0dp"
@@ -131,15 +140,15 @@
                 app:layout_constraintStart_toEndOf="@id/playerView"
                 app:layout_constraintEnd_toEndOf="parent">
                 <TextView android:id="@+id/txtPlayerChannel" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Select a channel" android:textColor="@android:color/white" android:textSize="22sp" android:textStyle="bold" android:maxLines="1" android:ellipsize="end" />
-                <TextView android:id="@+id/txtChannelTitle" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="7dp" android:text="EPG Preview" android:textColor="#B7A5FF" android:textSize="17sp" android:textStyle="bold" android:maxLines="1" android:ellipsize="end" />
-                <TextView android:id="@+id/txtEpgStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Select a channel to play" android:textColor="#BDB8D7" android:textSize="13sp" android:visibility="gone" />
-                <TextView android:id="@+id/txtDescription" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="9dp" android:textColor="#C9C4DE" android:textSize="14sp" android:lineSpacingExtra="2dp" android:maxLines="5" android:ellipsize="end" />
+                <TextView android:id="@+id/txtChannelTitle" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="7dp" android:text="EPG Preview" android:textColor="@color/primary_light" android:textSize="17sp" android:textStyle="bold" android:maxLines="1" android:ellipsize="end" />
+                <TextView android:id="@+id/txtEpgStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Select a channel to play" android:textColor="@color/text_secondary" android:textSize="13sp" android:visibility="gone" />
+                <TextView android:id="@+id/txtDescription" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="9dp" android:textColor="@color/text_secondary" android:textSize="14sp" android:lineSpacingExtra="2dp" android:maxLines="5" android:ellipsize="end" />
             </LinearLayout>
         </androidx.constraintlayout.widget.ConstraintLayout>
     </com.google.android.material.card.MaterialCardView>
 
     <FrameLayout android:id="@+id/epgArea" android:layout_width="0dp" android:layout_height="0dp" android:layout_marginStart="12dp" android:layout_marginEnd="12dp" android:layout_marginBottom="10dp" app:layout_constraintTop_toBottomOf="@id/topCard" app:layout_constraintBottom_toBottomOf="parent" app:layout_constraintStart_toStartOf="parent" app:layout_constraintEnd_toEndOf="parent">
-        <TextView android:id="@+id/stickyDate" android:layout_width="220dp" android:layout_height="40dp" android:gravity="center" android:text="CHANNELS" android:textColor="#D5D0FF" android:textSize="13sp" android:textStyle="bold" android:background="#211E3A" android:elevation="8dp" />
+        <TextView android:id="@+id/stickyDate" android:layout_width="220dp" android:layout_height="40dp" android:gravity="center" android:text="CHANNELS" android:textColor="@color/text_secondary" android:textSize="13sp" android:textStyle="bold" android:background="@color/card" android:elevation="8dp" />
         <HorizontalScrollView android:id="@+id/epgHeaderScroll" android:layout_width="match_parent" android:layout_height="40dp" android:layout_marginStart="220dp" android:scrollbars="none" android:fillViewport="false" android:elevation="7dp"><LinearLayout android:id="@+id/epgHeaderContainer" android:layout_width="wrap_content" android:layout_height="40dp" android:orientation="horizontal" /></HorizontalScrollView>
         <ScrollView android:id="@+id/channelVerticalScroll" android:layout_width="220dp" android:layout_height="match_parent" android:layout_marginTop="40dp" android:scrollbars="none" android:fillViewport="false" android:elevation="6dp"><LinearLayout android:id="@+id/channelContainer" android:layout_width="220dp" android:layout_height="wrap_content" android:orientation="vertical" /></ScrollView>
         <HorizontalScrollView android:id="@+id/epgHorizontalScroll" android:layout_width="match_parent" android:layout_height="match_parent" android:layout_marginStart="220dp" android:layout_marginTop="40dp" android:scrollbars="horizontal" android:fillViewport="false"><ScrollView android:id="@+id/epgVerticalScroll" android:layout_width="wrap_content" android:layout_height="match_parent" android:scrollbars="vertical" android:fillViewport="false"><LinearLayout android:id="@+id/epgRowsContainer" android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="vertical" /></ScrollView></HorizontalScrollView>
@@ -147,5 +156,5 @@
 
     <com.network24.player.features.live.activity.EpgDrawerMenuBinder android:id="@+id/epgDrawerMenuBinder" android:layout_width="1dp" android:layout_height="1dp" android:visibility="gone" />
     </androidx.constraintlayout.widget.ConstraintLayout>
-    <com.google.android.material.navigation.NavigationView android:id="@+id/rightNav" android:layout_width="340dp" android:layout_height="match_parent" android:layout_gravity="end" android:background="@android:color/white" app:itemIconTint="@android:color/black" app:itemTextColor="@android:color/black" app:menu="@menu/menu_live_right_drawer" />
+    <com.google.android.material.navigation.NavigationView android:id="@+id/rightNav" android:layout_width="340dp" android:layout_height="match_parent" android:layout_gravity="end" android:background="@android:color/white" app:itemBackground="@drawable/bg_navigation_item" app:itemIconTint="@color/navigation_item_content" app:itemTextColor="@color/navigation_item_content" app:menu="@menu/menu_live_right_drawer" />
 </androidx.drawerlayout.widget.DrawerLayout>

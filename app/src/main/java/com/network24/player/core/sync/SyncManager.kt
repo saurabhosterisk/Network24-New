@@ -1,6 +1,7 @@
 package com.network24.player.core.sync
 
 import android.content.Context
+import androidx.room.withTransaction
 import com.network24.player.core.api.ApiClient
 import com.network24.player.core.database.DatabaseProvider
 import com.network24.player.core.database.entity.CategoryType
@@ -11,7 +12,14 @@ import com.network24.player.core.database.mapper.toEpgEntity
 import com.network24.player.core.preferences.PreferenceManager
 import com.network24.player.core.cache.memory.MemoryCache
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import android.util.Xml
 import com.network24.player.core.database.entity.EpgEntity
 import okhttp3.ResponseBody
@@ -23,6 +31,29 @@ import java.util.TimeZone
 
 
 class SyncManager(private val context: Context) {
+
+    private companion object {
+        private const val EPG_INSERT_BATCH_SIZE = 2_000
+        private const val FULL_EPG_FRESH_MS = 6L * 60L * 60L * 1000L
+
+        private val fullEpgSyncScope = CoroutineScope(
+            SupervisorJob() + Dispatchers.IO
+        )
+        private val fullEpgSyncMutex = Mutex()
+        private var activeFullEpgSync: Deferred<SyncResult>? = null
+
+        private val xmltvOffsetDateFormatter = ThreadLocal.withInitial {
+            SimpleDateFormat("yyyyMMddHHmmss Z", Locale.US).apply {
+                isLenient = false
+            }
+        }
+        private val xmltvUtcDateFormatter = ThreadLocal.withInitial {
+            SimpleDateFormat("yyyyMMddHHmmss", Locale.US).apply {
+                isLenient = false
+                timeZone = TimeZone.getTimeZone("UTC")
+            }
+        }
+    }
 
     private val db = DatabaseProvider.get(context)
 
@@ -53,15 +84,17 @@ class SyncManager(private val context: Context) {
                 api.toCategoryEntity(position = index)
             }
 
-            db.categoryDao().clearByType(CategoryType.LIVE)
-            db.categoryDao().upsertAll(entities)
+            db.withTransaction {
+                db.categoryDao().clearByType(CategoryType.LIVE)
+                db.categoryDao().upsertAll(entities)
 
-            db.syncMetaDao().upsert(
-                SyncMetaEntity(
-                    key = SyncKeys.LIVE_CATEGORIES,
-                    lastSyncEpochMs = System.currentTimeMillis()
+                db.syncMetaDao().upsert(
+                    SyncMetaEntity(
+                        key = SyncKeys.LIVE_CATEGORIES,
+                        lastSyncEpochMs = System.currentTimeMillis()
+                    )
                 )
-            )
+            }
 
             SyncResult.Success
         } catch (t: Throwable) {
@@ -98,15 +131,17 @@ class SyncManager(private val context: Context) {
                 .filter { (it.stream_id ?: 0) != 0 }
                 .map { it.toChannelEntity() }
 
-            db.channelDao().clearAll()
-            db.channelDao().upsertAll(entities)
+            db.withTransaction {
+                db.channelDao().clearAll()
+                db.channelDao().upsertAll(entities)
 
-            db.syncMetaDao().upsert(
-                SyncMetaEntity(
-                    key = SyncKeys.LIVE_CHANNELS_ALL,
-                    lastSyncEpochMs = System.currentTimeMillis()
+                db.syncMetaDao().upsert(
+                    SyncMetaEntity(
+                        key = SyncKeys.LIVE_CHANNELS_ALL,
+                        lastSyncEpochMs = System.currentTimeMillis()
+                    )
                 )
-            )
+            }
 
             SyncResult.Success
         } catch (t: Throwable) {
@@ -140,14 +175,16 @@ class SyncManager(private val context: Context) {
             val listings = response.body()?.epg_listings.orEmpty()
             val entities = listings.map { it.toEpgEntity(streamId) }
 
-            db.epgDao().replaceForStream(streamId, entities)
+            db.withTransaction {
+                db.epgDao().replaceForStream(streamId, entities)
 
-            db.syncMetaDao().upsert(
-                SyncMetaEntity(
-                    key = SyncKeys.epgKey(streamId),
-                    lastSyncEpochMs = System.currentTimeMillis()
+                db.syncMetaDao().upsert(
+                    SyncMetaEntity(
+                        key = SyncKeys.epgKey(streamId),
+                        lastSyncEpochMs = System.currentTimeMillis()
+                    )
                 )
-            )
+            }
 
             SyncResult.Success
         } catch (t: Throwable) {
@@ -155,7 +192,48 @@ class SyncManager(private val context: Context) {
         }
     }
 
-    suspend fun syncFullEpg(force: Boolean = false): SyncResult = withContext(Dispatchers.IO) {
+    /**
+     * Full XMLTV downloads are large. All callers share one active refresh so
+     * opening Live With EPG while the dashboard is syncing cannot download and
+     * parse the same guide twice.
+     */
+    suspend fun syncFullEpg(force: Boolean = false): SyncResult {
+        if (!force && isFullEpgFresh()) {
+            return SyncResult.Success
+        }
+
+        val runningSync = fullEpgSyncMutex.withLock {
+            activeFullEpgSync?.takeIf { it.isActive } ?: run {
+                val newSync = fullEpgSyncScope.async {
+                    syncFullEpgInternal()
+                }
+                activeFullEpgSync = newSync
+                newSync.invokeOnCompletion {
+                    fullEpgSyncScope.launch {
+                        fullEpgSyncMutex.withLock {
+                            if (activeFullEpgSync === newSync) {
+                                activeFullEpgSync = null
+                            }
+                        }
+                    }
+                }
+                newSync
+            }
+        }
+
+        return runningSync.await()
+    }
+
+    private suspend fun isFullEpgFresh(): Boolean {
+        val lastSync = db.syncMetaDao()
+            .get(SyncKeys.FULL_EPG)
+            ?.lastSyncEpochMs
+            ?: return false
+
+        return System.currentTimeMillis() - lastSync < FULL_EPG_FRESH_MS
+    }
+
+    private suspend fun syncFullEpgInternal(): SyncResult = withContext(Dispatchers.IO) {
         try {
             val creds = PreferenceManager(context).getLoginCredentials()
                 ?: return@withContext SyncResult.Error("Missing login credentials")
@@ -170,7 +248,8 @@ class SyncManager(private val context: Context) {
 
             val body: ResponseBody = response.body() ?: return@withContext SyncResult.Error("XMLTV empty body")
 
-            // Replace strategy (dev-friendly): clear and insert
+            // Insert in sizeable batches. Streaming avoids holding the XMLTV
+            // document in memory while reused formatters keep parsing cheap.
             db.epgDao().deleteAll()
             body.byteStream().use { input ->
                 parseAndInsertXmlTv(input)
@@ -195,7 +274,7 @@ class SyncManager(private val context: Context) {
         parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false)
         parser.setInput(input, null)
 
-        val batch = ArrayList<EpgEntity>(1000)
+        val batch = ArrayList<EpgEntity>(EPG_INSERT_BATCH_SIZE)
 
         var event = parser.eventType
         while (event != XmlPullParser.END_DOCUMENT) {
@@ -246,7 +325,7 @@ class SyncManager(private val context: Context) {
                     batch.add(entity)
                 }
 
-                if (batch.size >= 1000) {
+                if (batch.size >= EPG_INSERT_BATCH_SIZE) {
                     db.epgDao().insertAll(batch)
                     batch.clear()
                 }
@@ -283,14 +362,12 @@ class SyncManager(private val context: Context) {
             // "20260809153000 +0530". Parse it so EPG is not shifted
             // by the device/provider timezone.
             val normalized = value.trim()
-            val sdf = if (normalized.length >= 19) {
-                SimpleDateFormat("yyyyMMddHHmmss Z", Locale.US)
+            val formatter: SimpleDateFormat = requireNotNull(if (normalized.length >= 19) {
+                xmltvOffsetDateFormatter.get()
             } else {
-                SimpleDateFormat("yyyyMMddHHmmss", Locale.US).apply {
-                    timeZone = TimeZone.getTimeZone("UTC")
-                }
-            }
-            sdf.parse(normalized)?.time ?: 0L
+                xmltvUtcDateFormatter.get()
+            })
+            formatter.parse(normalized)?.time ?: 0L
         } catch (e: Exception) {
             0L
         }

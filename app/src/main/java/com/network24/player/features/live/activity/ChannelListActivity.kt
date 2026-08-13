@@ -27,6 +27,7 @@ import com.network24.player.databinding.ActivityChannelListBinding
 
 import com.network24.player.features.dashboard.activity.DashboardActivity
 import com.network24.player.features.live.adapter.ChannelAdapter
+import com.network24.player.features.live.history.LiveWatchHistory
 import com.network24.player.features.live.models.LiveChannel
 import com.network24.player.features.live.repository.LiveRepository
 import com.network24.player.features.live.repository.SyncCallback
@@ -812,6 +813,11 @@ class ChannelListActivity : BaseActivity() {
                     true
                 }
 
+                R.id.action_recently_watched -> {
+                    startActivity(Intent(this, RecentlyWatchedActivity::class.java))
+                    true
+                }
+
 
 
 
@@ -836,6 +842,44 @@ class ChannelListActivity : BaseActivity() {
                     true
                 }
 
+
+
+
+
+                R.id.action_search_guide -> {
+
+
+
+                    startActivity(
+                        Intent(
+                            this,
+                            ProgramSearchActivity::class.java
+                        )
+                    )
+
+
+
+                    true
+                }
+
+
+
+
+                R.id.action_master_search -> {
+
+
+
+                    startActivity(
+                        Intent(
+                            this,
+                            MasterChannelSearchActivity::class.java
+                        )
+                    )
+
+
+
+                    true
+                }
 
 
 
@@ -1192,6 +1236,8 @@ class ChannelListActivity : BaseActivity() {
     private fun showPreview(
         channel: LiveChannel
     ) {
+
+        LiveWatchHistory.record(applicationContext, channel)
 
 
         binding.txtPlayerError.visibility =

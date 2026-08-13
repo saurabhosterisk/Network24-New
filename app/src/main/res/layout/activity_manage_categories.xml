@@ -18,8 +18,10 @@
             android:id="@+id/manageCategoriesBack"
             android:layout_width="48dp"
             android:layout_height="48dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
+            android:background="@drawable/bg_back_focus"
             android:contentDescription="Back"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
             android:padding="12dp"
             android:src="@drawable/ic_back"
             android:tint="@color/text_primary" />

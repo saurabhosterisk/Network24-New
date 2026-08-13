@@ -1,6 +1,10 @@
 package com.network24.player.features.chat.adapter
 
 import android.graphics.Color
+import android.text.Spannable
+import android.text.SpannableString
+import android.text.style.ForegroundColorSpan
+import android.text.style.UnderlineSpan
 import android.text.method.ScrollingMovementMethod
 import android.view.LayoutInflater
 import android.view.View
@@ -18,19 +22,20 @@ class ChatMessagesAdapter(
     private val mySenderId: String,
     private val onReply: (ChatMessage) -> Unit = {},
     private val onMessageMenu: (ChatMessage) -> Unit = {},
-    private val onReaction: (ChatMessage, String) -> Unit = { _, _ -> }
+    private val onReaction: (ChatMessage, String) -> Unit = { _, _ -> },
+    private val onReportedChannelClick: (ChatMessage) -> Unit = {}
 ) : RecyclerView.Adapter<ChatMessagesAdapter.VH>() {
     private val items = mutableListOf<ChatMessage>()
     fun submit(list: List<ChatMessage>) { items.clear(); items.addAll(list); notifyDataSetChanged() }
     override fun getItemViewType(position: Int): Int = if (items[position].senderId == mySenderId) VIEW_RIGHT else VIEW_LEFT
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
         val layout = if (viewType == VIEW_RIGHT) R.layout.item_chat_message_right else R.layout.item_chat_message_left
-        return VH(LayoutInflater.from(parent.context).inflate(layout, parent, false), onReply, onMessageMenu, onReaction)
+        return VH(LayoutInflater.from(parent.context).inflate(layout, parent, false), onReply, onMessageMenu, onReaction, onReportedChannelClick)
     }
     override fun onBindViewHolder(holder: VH, position: Int) = holder.bind(items[position], mySenderId)
     override fun getItemCount(): Int = items.size
 
-    class VH(itemView: View, private val onReply: (ChatMessage) -> Unit, private val onMessageMenu: (ChatMessage) -> Unit, private val onReaction: (ChatMessage, String) -> Unit) : RecyclerView.ViewHolder(itemView) {
+    class VH(itemView: View, private val onReply: (ChatMessage) -> Unit, private val onMessageMenu: (ChatMessage) -> Unit, private val onReaction: (ChatMessage, String) -> Unit, private val onReportedChannelClick: (ChatMessage) -> Unit) : RecyclerView.ViewHolder(itemView) {
         private val tvSender: TextView = itemView.findViewById(R.id.tvSender)
         private val tvText: TextView = itemView.findViewById(R.id.tvText)
         private val tvTime: TextView = itemView.findViewById(R.id.tvTime)
@@ -41,7 +46,13 @@ class ChatMessagesAdapter(
 
         init {
             (tvText.parent as? ViewGroup)?.addView(reactions)
-            tvText.setOnClickListener { onReply(current) }
+            tvText.setOnClickListener {
+                if (current.reportedChannelStreamId != null || reportedChannelName(current) != null) {
+                    onReportedChannelClick(current)
+                } else {
+                    onReply(current)
+                }
+            }
             tvText.setOnLongClickListener { onMessageMenu(current); true }
         }
 
@@ -50,6 +61,9 @@ class ChatMessagesAdapter(
             val isMine = m.senderId.isNotBlank() && m.senderId == mySenderId
             tvSender.text = if (isMine) "You" else m.senderName.ifBlank { "Unknown" }
             tvText.text = if (m.deleted) "🚫 This message was deleted" else m.text
+            if (!m.deleted) {
+                tvText.text = reportedChannelText(m)
+            }
             tvText.setTextColor(if (m.deleted) Color.parseColor("#78909C") else Color.WHITE)
             tvTime.text = formatLocalTime(m.ts) + if (m.edited && !m.deleted) "  (edited)" else ""
             tvUserIcon?.text = "👤"
@@ -73,6 +87,36 @@ class ChatMessagesAdapter(
             text = label; textSize = 12f; setTextColor(Color.WHITE); setBackgroundResource(R.drawable.bg_reaction_chip)
             setPadding(10, 4, 10, 4); setOnClickListener { onClick() }
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginEnd = 6 }
+        }
+
+        private fun reportedChannelText(message: ChatMessage): CharSequence {
+            val channelName = reportedChannelName(message) ?: return message.text
+            val start = message.text.indexOf(channelName, ignoreCase = true)
+            if (start < 0) return message.text
+
+            return SpannableString(message.text).apply {
+                setSpan(
+                    ForegroundColorSpan(Color.parseColor("#F44336")),
+                    start,
+                    start + channelName.length,
+                    Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+                )
+                setSpan(
+                    UnderlineSpan(),
+                    start,
+                    start + channelName.length,
+                    Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+                )
+            }
+        }
+
+        private fun reportedChannelName(message: ChatMessage): String? {
+            return message.reportedChannelName?.takeIf { it.isNotBlank() }
+                ?: Regex("""channel ['\"](.+?)['\"]""", RegexOption.IGNORE_CASE)
+                    .find(message.text)
+                    ?.groupValues
+                    ?.getOrNull(1)
+                    ?.takeIf { it.isNotBlank() }
         }
 
         private fun formatLocalTime(ts: Timestamp?): String {

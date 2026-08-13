@@ -7,9 +7,9 @@
         android:icon="@drawable/ic_home" />
 
     <item
-        android:id="@+id/action_manage_categories"
-        android:title="Manage Categories"
-        android:icon="@drawable/ic_settings" />
+        android:id="@+id/action_recently_watched"
+        android:title="Recently Watched"
+        android:icon="@android:drawable/ic_menu_recent_history" />
 
     <item
         android:id="@+id/action_refresh_all"
@@ -20,6 +20,16 @@
         android:id="@+id/action_refresh_guide"
         android:title="Refresh TV Guide"
         android:icon="@drawable/ic_info" />
+
+    <item
+        android:id="@+id/action_search_guide"
+        android:title="Search TV Guide"
+        android:icon="@android:drawable/ic_menu_search" />
+
+    <item
+        android:id="@+id/action_master_search"
+        android:title="Master Search"
+        android:icon="@android:drawable/ic_menu_search" />
 
     <item
         android:id="@+id/action_settings"

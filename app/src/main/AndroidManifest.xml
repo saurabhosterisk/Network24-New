@@ -110,6 +110,18 @@
 
 
         <activity
+            android:name=".features.live.activity.ProgramSearchActivity"
+            android:exported="false"
+            android:screenOrientation="landscape" />
+
+
+        <activity
+            android:name=".features.live.activity.MasterChannelSearchActivity"
+            android:exported="false"
+            android:screenOrientation="landscape" />
+
+
+        <activity
             android:name=".features.live.activity.FavoriteChannelsActivity"
             android:exported="false"
             android:screenOrientation="landscape" />
@@ -117,6 +129,11 @@
 
         <activity
             android:name=".features.live.activity.LiveCategoryActivity"
+            android:exported="false"
+            android:screenOrientation="landscape" />
+
+        <activity
+            android:name=".features.live.activity.RecentlyWatchedActivity"
             android:exported="false"
             android:screenOrientation="landscape" />
 

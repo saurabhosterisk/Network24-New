@@ -1,6 +1,5 @@
 package com.network24.player.features.live.adapter
 
-import android.graphics.Color
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
@@ -39,16 +38,8 @@ class CategoryAdapter(
             true
         }
 
-        // Fire Stick focus: use the same thin white outline as the dashboard.
-        // Do not scale the card, so edge cards are never clipped.
         holder.itemView.setOnFocusChangeListener { _, hasFocus ->
-            if (hasFocus) {
-                holder.binding.cardCategory.strokeWidth = 1
-                holder.binding.cardCategory.strokeColor = Color.WHITE
-            } else {
-                holder.binding.cardCategory.strokeWidth = 0
-                holder.binding.cardCategory.strokeColor = Color.TRANSPARENT
-            }
+            holder.binding.cardCategory.strokeWidth = dp(holder, if (hasFocus) 2 else 1)
         }
     }
 
@@ -56,5 +47,9 @@ class CategoryAdapter(
         list.clear()
         list.addAll(newList)
         notifyDataSetChanged()
+    }
+
+    private fun dp(holder: ViewHolder, value: Int): Int {
+        return (value * holder.itemView.resources.displayMetrics.density).toInt()
     }
 }

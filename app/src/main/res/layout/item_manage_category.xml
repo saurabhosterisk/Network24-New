@@ -10,11 +10,11 @@
     android:clickable="true"
     android:focusable="true"
     android:foreground="?attr/selectableItemBackground"
-    app:cardBackgroundColor="@color/card"
+    app:cardBackgroundColor="@color/interactive_card_background"
     app:cardCornerRadius="14dp"
     app:cardElevation="2dp"
-    app:strokeColor="@android:color/white"
-    app:strokeWidth="0dp">
+    app:strokeColor="@color/interactive_card_stroke"
+    app:strokeWidth="1dp">
 
     <LinearLayout
         android:layout_width="match_parent"

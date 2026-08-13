@@ -23,6 +23,10 @@
 
     <color name="divider">#303030</color>
     <color name="focus">#FFFFFF</color>
+    <!-- Shared interaction states for touch, mouse hover, and TV remote focus. -->
+    <color name="selection_surface">#3A2528</color>
+    <color name="selection_surface_pressed">#512D31</color>
+    <color name="selection_stroke">#FFFFFF</color>
     <color name="overlay_background">#B3000000</color>
     <color name="menu_item_background">#66000000</color>
 

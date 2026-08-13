@@ -410,7 +410,8 @@
         android:layout_height="match_parent"
         android:layout_gravity="end"
         android:background="@android:color/white"
-        app:itemIconTint="@android:color/black"
-        app:itemTextColor="@android:color/black"
+        app:itemBackground="@drawable/bg_navigation_item"
+        app:itemIconTint="@color/navigation_item_content"
+        app:itemTextColor="@color/navigation_item_content"
         app:menu="@menu/menu_live_right_drawer" />
 </androidx.drawerlayout.widget.DrawerLayout>
