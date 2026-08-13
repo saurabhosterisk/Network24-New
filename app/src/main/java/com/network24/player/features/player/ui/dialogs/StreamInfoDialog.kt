@@ -82,11 +82,26 @@ class StreamInfoDialog : DialogFragment() {
         }
 
         binding.tvPlayerState.text = when (player.playbackState) {
-            Player.STATE_IDLE -> "Idle"
-            Player.STATE_BUFFERING -> "Buffering"
-            Player.STATE_READY -> if (player.isPlaying) "Playing" else "Paused"
-            Player.STATE_ENDED -> "Ended"
-            else -> "Unknown"
+
+            Player.STATE_IDLE ->
+                "Idle"
+
+            Player.STATE_BUFFERING -> {
+                if (player.isPlaying) {
+                    "Playing (Buffer Refresh)"
+                } else {
+                    "Buffering"
+                }
+            }
+
+            Player.STATE_READY ->
+                if (player.isPlaying) "Playing" else "Paused"
+
+            Player.STATE_ENDED ->
+                "Ended"
+
+            else ->
+                "Unknown"
         }
         binding.tvBufferedPercent.text = "${player.bufferedPercentage}%"
         binding.tvBufferDuration.text = formatDuration(player.totalBufferedDuration)
@@ -121,24 +136,105 @@ class StreamInfoDialog : DialogFragment() {
         binding.tvDiagnosis.text = buildDiagnosis(player, downloadMbps, requiredMbps, rebufferCount, bufferingMs, error != null)
     }
 
-    private fun calculateHealthScore(player: Player, downloadMbps: Double, requiredMbps: Float, rebufferCount: Int, hasError: Boolean): Int {
+    private fun calculateHealthScore(
+        player: Player,
+        downloadMbps: Double,
+        requiredMbps: Float,
+        rebufferCount: Int,
+        hasError: Boolean
+    ): Int {
+
         var score = 100
-        if (player.playbackState == Player.STATE_BUFFERING) score -= 25
-        if (player.totalBufferedDuration < 2_000L) score -= 25 else if (player.totalBufferedDuration < 5_000L) score -= 10
-        score -= rebufferCount.coerceAtMost(3) * 8
-        if (requiredMbps > 0f && downloadMbps > 0.0 && downloadMbps < requiredMbps) score -= 25
-        if (hasError) score -= 20
-        return score.coerceIn(0, 100)
+
+
+        val bufferingMs =
+            PlayerManager.getTotalBufferingMs()
+
+
+        // Real buffering events
+        if (rebufferCount > 0) {
+            score -= (rebufferCount * 10)
+        }
+
+
+        // Real buffering duration
+        when {
+            bufferingMs > 30000L -> {
+                score -= 25
+            }
+
+            bufferingMs > 10000L -> {
+                score -= 10
+            }
+        }
+
+
+        // Network capacity
+        if (
+            requiredMbps > 0f &&
+            downloadMbps > 0.0 &&
+            downloadMbps < requiredMbps
+        ) {
+            score -= 20
+        }
+
+
+        // Playback error
+        if (hasError) {
+            score -= 30
+        }
+
+
+        return score.coerceIn(0,100)
     }
 
-    private fun buildDiagnosis(player: Player, downloadMbps: Double, requiredMbps: Float, rebufferCount: Int, bufferingMs: Long, hasError: Boolean): String {
-        if (hasError) return "Playback error detected. Try another channel; if other channels work, this stream may be down."
-        if (player.playbackState == Player.STATE_BUFFERING && rebufferCount > 0) return "Buffering now. The stream is waiting for more data. Check internet speed and server stability."
-        if (rebufferCount >= 2) return "Frequent rebuffering detected. Likely network instability or a busy/slow stream source."
-        if (requiredMbps > 0f && downloadMbps > 0.0 && downloadMbps < requiredMbps) return "Download speed is below the estimated requirement for this video quality. Internet may be limiting playback."
-        if (bufferingMs >= 5_000L) return "Playback has spent noticeable time buffering. Monitor the buffer and download speed."
-        if (player.totalBufferedDuration < 2_000L) return "Buffer is low. Playback may become unstable if network speed drops."
-        return "Connection and playback look healthy. No significant buffering problem detected."
+    private fun buildDiagnosis(
+        player: Player,
+        downloadMbps: Double,
+        requiredMbps: Float,
+        rebufferCount: Int,
+        bufferingMs: Long,
+        hasError: Boolean
+    ): String {
+
+
+        if (hasError) {
+            return "Playback error detected. Stream source may have an issue."
+        }
+
+
+        if (
+            rebufferCount > 0 &&
+            bufferingMs > 0 &&
+            PlayerManager.hasEverStartedPlayback()
+        ) {
+            return "Stream had $rebufferCount buffering event(s) with ${formatDuration(bufferingMs)} total buffering time."
+        }
+
+
+        if (
+            player.playbackState == Player.STATE_BUFFERING &&
+            !PlayerManager.hasEverStartedPlayback()
+        ) {
+            return "Stream is loading for first time."
+        }
+
+
+        if (
+            requiredMbps > 0f &&
+            downloadMbps > 0.0 &&
+            downloadMbps < requiredMbps
+        ) {
+            return "Network speed may be insufficient for this quality."
+        }
+
+
+        if (bufferingMs > 10000L) {
+            return "Playback experienced noticeable buffering."
+        }
+
+
+        return "Stream is playing smoothly. No buffering issue detected."
     }
 
     private fun getRequiredSpeedMbps(height: Int): Float = when {
@@ -157,12 +253,32 @@ class StreamInfoDialog : DialogFragment() {
     }
 
     private fun formatDuration(ms: Long): String {
-        if (ms < 0L) return "-"
-        val seconds = TimeUnit.MILLISECONDS.toSeconds(ms)
+
+        if (ms <= 0) {
+            return "0s"
+        }
+
+
+        val totalSeconds = ms / 1000
+
+        val hours = totalSeconds / 3600
+        val minutes = (totalSeconds % 3600) / 60
+        val seconds = totalSeconds % 60
+
+
         return when {
-            seconds < 60 -> "${seconds}s"
-            seconds < 3600 -> String.format(Locale.US, "%d:%02d", seconds / 60, seconds % 60)
-            else -> String.format(Locale.US, "%d:%02d:%02d", seconds / 3600, (seconds % 3600) / 60, seconds % 60)
+
+            hours > 0 -> {
+                "${hours}h ${minutes}m ${seconds}s"
+            }
+
+            minutes > 0 -> {
+                "${minutes}m ${seconds}s"
+            }
+
+            else -> {
+                "${seconds}s"
+            }
         }
     }
 

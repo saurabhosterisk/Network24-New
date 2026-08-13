@@ -74,17 +74,17 @@ object PlayerManager {
 
     // Diagnostics
 
-    private var rebufferCount =
-        0
+    private var rebufferCount = 0
 
+    private var bufferingStartedAtMs = 0L
 
-    private var bufferingStartedAtMs =
-        0L
+    private var totalBufferingMs = 0L
 
+    private var hasStartedPlaying = false
 
-    private var totalBufferingMs =
-        0L
+    private var bufferingSessionActive = false
 
+    private var playbackActuallyStarted = false
 
     private var lastError:
             PlaybackException? = null
@@ -427,71 +427,69 @@ object PlayerManager {
                                     playbackState: Int
                                 ) {
 
-
                                     val wasBuffering =
-                                        lastPlaybackState ==
-                                                Player.STATE_BUFFERING
+                                        lastPlaybackState == Player.STATE_BUFFERING
 
+
+                                    /*
+                                       Count buffering only after
+                                       playback has started once
+                                    */
+                                    if (
+                                        playbackState == Player.STATE_BUFFERING &&
+                                        !wasBuffering &&
+                                        playbackActuallyStarted
+                                    ) {
+
+                                        rebufferCount++
+
+                                        bufferingStartedAtMs =
+                                            System.currentTimeMillis()
+
+                                        bufferingSessionActive = true
+                                    }
+
+
+                                    /*
+                                       Buffering finished
+                                    */
+                                    if (
+                                        wasBuffering &&
+                                        playbackState != Player.STATE_BUFFERING &&
+                                        bufferingSessionActive
+                                    ) {
+
+
+                                        val duration =
+                                            System.currentTimeMillis()
+                                        -
+                                        bufferingStartedAtMs
+
+
+                                        if (
+                                            duration > 0L &&
+                                            duration <= 300000L
+                                        ) {
+
+                                            totalBufferingMs += duration
+                                        }
+
+
+                                        bufferingStartedAtMs = 0L
+
+                                        bufferingSessionActive = false
+                                    }
 
 
 
                                     if (
-
-                                        playbackState ==
-                                        Player.STATE_BUFFERING
-
-                                        &&
-
-                                        !wasBuffering
-
+                                        playbackState == Player.STATE_READY &&
+                                        exoPlayer?.isPlaying == true
                                     ) {
 
-
-                                        rebufferCount++
-
-
-
-                                        bufferingStartedAtMs =
-                                            System.currentTimeMillis()
+                                        hasStartedPlaying = true
+                                        playbackActuallyStarted = true
                                     }
-
-
-
-
-
-                                    else if (
-
-                                        wasBuffering
-
-                                        &&
-
-                                        playbackState !=
-                                        Player.STATE_BUFFERING
-
-                                    ) {
-
-
-
-                                        if (
-                                            bufferingStartedAtMs > 0L
-                                        ) {
-
-
-                                            totalBufferingMs +=
-
-                                                System.currentTimeMillis()
-                                            -
-                                            bufferingStartedAtMs
-
-
-
-                                            bufferingStartedAtMs =
-                                                0L
-                                        }
-                                    }
-
-
-
 
 
                                     lastPlaybackState =
@@ -1084,6 +1082,13 @@ object PlayerManager {
 
         lastPlaybackState =
             Player.STATE_IDLE
+
+        hasStartedPlaying = false
+
+        bufferingSessionActive = false
+
+        playbackActuallyStarted = false
+
     }
 
 
@@ -1216,8 +1221,15 @@ object PlayerManager {
     }
 
 
+    fun hasEverStartedPlayback(): Boolean {
+        return playbackActuallyStarted
+    }
 
 
+    fun isPlaybackStarted(): Boolean {
+
+        return playbackActuallyStarted
+    }
 
 
 
@@ -1225,30 +1237,11 @@ object PlayerManager {
 
     fun getTotalBufferingMs(): Long {
 
-
-        return if (
-
-            bufferingStartedAtMs > 0L
-
-        ) {
-
-
-            totalBufferingMs +
-
-                    (
-
-                            System.currentTimeMillis()
-                                    -
-                                    bufferingStartedAtMs
-
-                            )
-
-        }
-        else {
-
-
-            totalBufferingMs
-        }
+        return totalBufferingMs
+            .coerceIn(
+                0L,
+                3600000L
+            )
     }
 
 
