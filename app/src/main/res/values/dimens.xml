@@ -37,4 +37,11 @@
     <dimen name="search_width_tv">380dp</dimen>
     <dimen name="header_height">80dp</dimen>
 
+    <!-- Layout fallbacks used by large-screen resource variants. -->
+    <dimen name="live_browser_panel_width">360dp</dimen>
+    <dimen name="navigation_drawer_width">420dp</dimen>
+    <dimen name="playback_drawer_width">380dp</dimen>
+    <dimen name="live_header_height">88dp</dimen>
+    <dimen name="epg_channel_column_width">300dp</dimen>
+
 </resources>

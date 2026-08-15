@@ -23,7 +23,6 @@ object UpdateManager {
     private const val TAG = "UpdateManager"
 
     fun checkForUpdate(
-        activity: Activity,
         onNoUpdate: () -> Unit,
         onUpdateAvailable: (UpdateResponse) -> Unit
     ) {

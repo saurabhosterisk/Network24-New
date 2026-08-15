@@ -107,8 +107,8 @@ class PreferenceManager(context: Context) {
         maxConnections: Int,
         isTrial: Boolean
     ) {
-        // username param currently unused (keeping it for API parity/future)
         prefs.edit()
+            .putString(KEY_USERNAME, username)
             .putString(KEY_STATUS, status)
             .putLong(KEY_EXPIRY, expiry)
             .putInt(KEY_ACTIVE_CONNECTIONS, activeConnections)

@@ -1359,22 +1359,18 @@ class EpgChannelListActivity : BaseActivity() {
 
 
         channels.forEachIndexed {
-                index,
+                _,
                 channel ->
 
 
 
             addStickyChannel(
-                channel,
-                index
+                channel
             )
 
 
 
-            addEpgRow(
-                channel,
-                index
-            )
+            addEpgRow(channel)
         }
 
 
@@ -1662,15 +1658,13 @@ class EpgChannelListActivity : BaseActivity() {
 
 
     private fun addStickyChannel(
-        channel: LiveChannel,
-        index: Int
+        channel: LiveChannel
     ) {
 
 
         val panel =
             createChannelPanel(
-                channel,
-                index
+                channel
             )
 
 
@@ -1726,8 +1720,7 @@ class EpgChannelListActivity : BaseActivity() {
 
 
     private fun addEpgRow(
-        channel: LiveChannel,
-        index: Int
+        channel: LiveChannel
     ) {
 
 
@@ -1943,8 +1936,7 @@ class EpgChannelListActivity : BaseActivity() {
     }
 
     private fun createChannelPanel(
-        channel: LiveChannel,
-        index: Int
+        channel: LiveChannel
     ): LinearLayout {
 
 
@@ -2457,7 +2449,6 @@ class EpgChannelListActivity : BaseActivity() {
                 background =
                     programBackground(
                         channel,
-                        program,
                         isNow,
                         false
                     )
@@ -2471,7 +2462,6 @@ class EpgChannelListActivity : BaseActivity() {
                     view.background =
                         programBackground(
                             channel,
-                            program,
                             isNow,
                             hasFocus
                         )
@@ -3373,7 +3363,6 @@ class EpgChannelListActivity : BaseActivity() {
 
     private fun programBackground(
         channel: LiveChannel,
-        program: EpgEntity,
         isNow: Boolean,
         focused: Boolean
     ): GradientDrawable {

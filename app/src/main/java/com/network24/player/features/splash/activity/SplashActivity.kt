@@ -61,7 +61,6 @@ class SplashActivity : BaseActivity() {
 
         try {
             UpdateManager.checkForUpdate(
-                this,
                 onNoUpdate = {
                     runOnUiThread {
                         timeoutHandler.removeCallbacks(timeoutRunnable)

@@ -96,7 +96,7 @@ class LiveCategoryActivity : BaseActivity() {
             try {
                 val categories = repository.getCategories(server = prefs.getServer(), username = prefs.getUsername(), password = prefs.getPassword(), forceRefresh = false)
                 val disabled = categorySettingsRepository.getDisabledCategoryIds(prefs.getUsername())
-                val favoriteIds = favRepo.getFavoriteItemIds(prefs.getUsername(), "LIVE_CATEGORY")
+                val favoriteIds = favRepo.getFavoriteItemIds("LIVE_CATEGORY")
                 withContext(Dispatchers.Main) {
                     disabledCategoryIds = disabled
                     updateUIWithCategories(categories, favoriteIds)
@@ -222,7 +222,7 @@ class LiveCategoryActivity : BaseActivity() {
         val userId = prefs.getUsername()
         lifecycleScope.launch {
             try {
-                val existing = favRepo.getFavoriteItemIds(userId, "LIVE_CATEGORY")
+                val existing = favRepo.getFavoriteItemIds("LIVE_CATEGORY")
                 if (existing.contains(category.category_id)) { Toast.makeText(this@LiveCategoryActivity, "${category.category_name} already in Favorites", Toast.LENGTH_SHORT).show(); return@launch }
                 favRepo.addFavorite(userId, "LIVE_CATEGORY", category.category_id)
                 favoriteCategories.add(category); favoriteAdapter.updateList(favoriteCategories); updateFavoritesSectionVisibility()

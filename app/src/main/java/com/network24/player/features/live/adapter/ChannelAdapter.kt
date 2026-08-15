@@ -120,10 +120,9 @@ class ChannelAdapter(
 
                 val now = System.currentTimeMillis()
                 val visible = programs
-                    .filter {
-                        it.startTimestamp != null &&
-                            it.stopTimestamp != null &&
-                            it.stopTimestamp!! > now
+                    .filter { program ->
+                        val stop = program.stopTimestamp ?: return@filter false
+                        program.startTimestamp != null && stop > now
                     }
                     .sortedBy { it.startTimestamp }
 

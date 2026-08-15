@@ -14,7 +14,7 @@ class FavoritesRepository(
     private fun doc(userId: String) =
         firestore.collection("user_favorites").document(userId)
 
-    suspend fun getFavoriteItemIds(userId: String, type: String): Set<String> {
+    suspend fun getFavoriteItemIds(type: String): Set<String> {
         return favoritesDao.getByType(type).map { it.itemId }.toSet()
     }
 

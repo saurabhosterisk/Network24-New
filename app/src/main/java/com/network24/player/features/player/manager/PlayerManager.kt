@@ -32,7 +32,6 @@ import java.lang.ref.WeakReference
 
 
 
-@OptIn(UnstableApi::class)
 object PlayerManager {
 
 

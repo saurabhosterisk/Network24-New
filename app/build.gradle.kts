@@ -14,9 +14,9 @@ android {
         applicationId = "com.network24.player"
 
         minSdk = 23
-        targetSdk = 36
+        targetSdk = 35
 
-        versionCode = 21
+        versionCode = 25
         versionName = "2.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

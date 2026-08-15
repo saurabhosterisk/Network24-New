@@ -653,9 +653,7 @@ class FavoriteChannelsActivity : BaseActivity() {
 
 
 
-                    forceRefreshData(
-                        true
-                    )
+                    forceRefreshData()
 
                 }
 
@@ -1147,9 +1145,7 @@ class FavoriteChannelsActivity : BaseActivity() {
 
 
 
-    private fun forceRefreshData(
-        isInitialSync: Boolean = false
-    ) {
+    private fun forceRefreshData() {
 
 
         if (isRefreshing)

@@ -102,11 +102,12 @@ fun EpgChannelListActivity.playChannel(channel: LiveChannel, program: EpgEntity?
         ?.invoke(this, channel, program)
         ?: privateMethod("updateTopInfo", LiveChannel::class.java)?.invoke(this, channel)
 
-    @Suppress("UNCHECKED_CAST")
     PlayerManager.play(this, playerView as androidx.media3.ui.PlayerView, url)
 
     val focusViews = privateField("channelFocusViews") as? MutableList<*> ?: return
-    val channels = privateField("channels") as? List<LiveChannel> ?: return
+    val channels = (privateField("channels") as? List<*>)
+        ?.filterIsInstance<LiveChannel>()
+        ?: return
     focusViews.forEachIndexed { index, view ->
         val channelAtIndex = channels.getOrNull(index) ?: return@forEachIndexed
         if (view is View) {

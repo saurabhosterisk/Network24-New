@@ -126,7 +126,7 @@ class StreamInfoDialog : DialogFragment() {
         val error = PlayerManager.getLastError()
         binding.tvLastError.text = error?.errorCodeName ?: "None"
 
-        val score = calculateHealthScore(player, downloadMbps, requiredMbps, rebufferCount, error != null)
+        val score = calculateHealthScore(downloadMbps, requiredMbps, rebufferCount, error != null)
         binding.tvHealthScore.text = "$score / 100"
         binding.tvHealthLabel.text = when {
             score >= 85 -> "GOOD"
@@ -137,7 +137,6 @@ class StreamInfoDialog : DialogFragment() {
     }
 
     private fun calculateHealthScore(
-        player: Player,
         downloadMbps: Double,
         requiredMbps: Float,
         rebufferCount: Int,
@@ -414,6 +413,6 @@ Last error: ${error?.errorCodeName ?: "None"}
     }
 
     companion object {
-        fun newInstance(anyId: String): StreamInfoDialog = StreamInfoDialog()
+        fun newInstance(): StreamInfoDialog = StreamInfoDialog()
     }
 }

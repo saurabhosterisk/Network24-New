@@ -146,7 +146,6 @@ class Network24App : Application(), Application.ActivityLifecycleCallbacks {
                         if (dc.type == DocumentChange.Type.ADDED) {
                             val doc = dc.document
                             val messageText = doc.getString("text") ?: "No message"
-                            val senderName = doc.getString("senderName") ?: "System"
                             val senderId = doc.getString("senderId") ?: ""
 
                             val currentSenderId = getMySenderId()
@@ -164,7 +163,7 @@ class Network24App : Application(), Application.ActivityLifecycleCallbacks {
     }
 
     private fun getMySenderId(): String {
-        val senderName = (prefs.getUsername() ?: "guest").trim().ifEmpty { "guest" }
+        val senderName = prefs.getUsername().trim().ifEmpty { "guest" }
         val deviceId = android.provider.Settings.Secure.getString(contentResolver, android.provider.Settings.Secure.ANDROID_ID) ?: "device"
         return senderName.lowercase().replace(" ", "_") + "_" + deviceId.takeLast(6)
     }

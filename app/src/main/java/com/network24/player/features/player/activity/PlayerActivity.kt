@@ -448,9 +448,7 @@ class PlayerActivity : BaseActivity() {
 
 
                 StreamInfoDialog
-                    .newInstance(
-                        id.toString()
-                    )
+                    .newInstance()
                     .show(
                         supportFragmentManager,
                         "StreamInfoDialog"
@@ -701,9 +699,6 @@ class PlayerActivity : BaseActivity() {
 
         if (enable) {
 
-            var subtitleFound = false
-
-
             player.currentTracks.groups.forEach { group ->
 
                 if (group.type == C.TRACK_TYPE_TEXT) {
@@ -724,7 +719,6 @@ class PlayerActivity : BaseActivity() {
                                     )
                                 )
 
-                            subtitleFound = true
                             break
                         }
                     }

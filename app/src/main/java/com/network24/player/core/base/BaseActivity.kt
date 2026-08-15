@@ -201,9 +201,6 @@ open class BaseActivity : AppCompatActivity() {
                 is SyncResult.Error -> {
                     Toast.makeText(this@BaseActivity, result.message, Toast.LENGTH_LONG).show()
                 }
-                else -> {
-                    Toast.makeText(this@BaseActivity, "TV Guide sync finished.", Toast.LENGTH_SHORT).show()
-                }
             }
         }
     }
