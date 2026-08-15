@@ -77,7 +77,29 @@ class DashboardActivity : BaseActivity() {
         }
     }
     private fun enlargeDashboardIcons(card: ViewGroup, sizeDp: Int) { val sizePx = (sizeDp * resources.displayMetrics.density).toInt(); for (index in 0 until card.childCount) when (val child = card.getChildAt(index)) { is ImageView -> { child.layoutParams = child.layoutParams.apply { width = sizePx; height = sizePx }; child.scaleType = ImageView.ScaleType.CENTER_INSIDE; child.requestLayout() }; is ViewGroup -> enlargeDashboardIcons(child, sizeDp) } }
-    private fun setupDrawerAndMenu() { binding.btnMore.setOnClickListener { openRightDrawer(binding.drawerLayout) }; setupOptionalRightDrawerMenu(binding.drawerLayout, binding.rightNav) { itemId -> when (itemId) { R.id.action_home -> { closeRightDrawer(binding.drawerLayout); true }; R.id.action_recently_watched -> { startActivity(Intent(this, RecentlyWatchedActivity::class.java)); true }; R.id.action_refresh_all -> { syncInitialData(true); true }; R.id.action_refresh_guide -> { refreshTvGuide(); true }; R.id.action_search_guide -> { startActivity(Intent(this, ProgramSearchActivity::class.java)); true }; R.id.action_master_search -> { startActivity(Intent(this, MasterChannelSearchActivity::class.java)); true }; R.id.action_settings -> { startActivity(Intent(this, SettingsActivity::class.java)); true }; R.id.action_logout -> { prefs.clear(); startActivity(Intent(this, LoginActivity::class.java)); finishAffinity(); true }; else -> false } }; binding.drawerLayout.addDrawerListener(object : DrawerLayout.SimpleDrawerListener() { override fun onDrawerOpened(drawerView: View) { if (drawerView.id == binding.rightNav.id) binding.rightNav.post { val menuView = binding.rightNav.getChildAt(0) as? NavigationMenuView; if (menuView != null) for (i in 0 until menuView.childCount) { val child = menuView.getChildAt(i); if (child.isFocusable) { child.requestFocus(); break } } } } }) }
+    private fun setupDrawerAndMenu() {
+        binding.btnMore.setOnClickListener { openRightDrawer(binding.drawerLayout) }
+        setupOptionalRightDrawerMenu(binding.drawerLayout, binding.rightNav) { itemId ->
+            when (itemId) {
+                R.id.action_home -> { closeRightDrawer(binding.drawerLayout); true }
+                R.id.action_recently_watched -> { startActivity(Intent(this, RecentlyWatchedActivity::class.java)); true }
+                R.id.action_refresh_all -> { syncInitialData(true); true }
+                R.id.action_refresh_guide -> { refreshTvGuide(); true }
+                R.id.action_search_guide -> { startActivity(Intent(this, ProgramSearchActivity::class.java)); true }
+                R.id.action_master_search -> { startActivity(Intent(this, MasterChannelSearchActivity::class.java)); true }
+                R.id.action_settings -> { startActivity(Intent(this, SettingsActivity::class.java)); true }
+                R.id.action_exit_app -> { confirmExitApp(); true }
+                else -> false
+            }
+        }
+        binding.drawerLayout.addDrawerListener(object : DrawerLayout.SimpleDrawerListener() {
+            override fun onDrawerOpened(drawerView: View) {
+                if (drawerView.id == binding.rightNav.id) {
+                    binding.rightNav.post { focusFirstFocusableDescendant(binding.rightNav) }
+                }
+            }
+        })
+    }
 
     private fun setClickListeners() {
         binding.cardLiveTv.setOnClickListener { startActivity(Intent(this, LiveCategoryActivity::class.java)) }

@@ -1433,6 +1433,7 @@ class FavoriteChannelsActivity : BaseActivity() {
 
 
 
+                R.id.action_exit_app -> { confirmExitApp(); true }
                 else -> false
 
             }

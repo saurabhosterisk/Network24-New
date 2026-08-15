@@ -63,7 +63,7 @@ class LiveCategoryActivity : BaseActivity() {
 
         if (epgMode) {
             binding.txtTitle.text = "LIVE WITH EPG"
-            binding.edtSearch.hint = "Search EPG Categories"
+            binding.searchLayout.hint = "Search EPG Categories"
         }
 
         setupDrawerAndMenu()
@@ -153,15 +153,14 @@ class LiveCategoryActivity : BaseActivity() {
                 R.id.action_search_guide -> { startActivity(Intent(this, ProgramSearchActivity::class.java)); true }
                 R.id.action_master_search -> { startActivity(Intent(this, MasterChannelSearchActivity::class.java)); true }
                 R.id.action_settings -> { startActivity(Intent(this, SettingsActivity::class.java)); true }
-                R.id.action_logout -> { prefs.clear(); startActivity(Intent(this, LoginActivity::class.java)); finishAffinity(); true }
+                R.id.action_exit_app -> { confirmExitApp(); true }
                 else -> false
             }
         }
         binding.drawerLayout.addDrawerListener(object : DrawerLayout.SimpleDrawerListener() {
             override fun onDrawerOpened(drawerView: View) {
                 if (drawerView.id == binding.rightNav.id) binding.rightNav.post {
-                    val menuView = binding.rightNav.getChildAt(0) as? NavigationMenuView
-                    if (menuView != null) for (i in 0 until menuView.childCount) { val child = menuView.getChildAt(i); if (child.isFocusable) { child.requestFocus(); break } }
+                    focusFirstFocusableDescendant(binding.rightNav)
                 }
             }
         })

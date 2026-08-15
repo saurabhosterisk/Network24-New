@@ -1,8 +1,6 @@
 package com.network24.player.core.net
 
 import android.content.Context
-import androidx.annotation.OptIn
-import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.DefaultRenderersFactory
@@ -12,14 +10,21 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
  * Single source of truth for stream HTTP/media-source configuration.
  * Normal playback and MultiView use the same request configuration.
  */
-@OptIn(UnstableApi::class)
+@Suppress("UnsafeOptInUsageError")
 object StreamDataSourceFactory {
     const val USER_AGENT = "N24PlayerPlayer"
 
     fun createDataSourceFactory(): DataSource.Factory {
         val httpFactory = DefaultHttpDataSource.Factory()
             .setUserAgent(USER_AGENT)
+            // Fire OS 6 can take longer to resolve/connect to IPTV hosts than
+            // newer phones. Avoid treating that initial delay as a dead stream.
+            .setConnectTimeoutMs(30_000)
+            .setReadTimeoutMs(30_000)
             .setAllowCrossProtocolRedirects(true)
+            .setDefaultRequestProperties(
+                mapOf("Connection" to "close")
+            )
 
         return DataSource.Factory {
             CountingDataSource(httpFactory.createDataSource())

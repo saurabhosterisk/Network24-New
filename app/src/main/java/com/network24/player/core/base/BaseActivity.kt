@@ -57,6 +57,7 @@ open class BaseActivity : AppCompatActivity() {
         onMenuClick: (Int) -> Boolean
     ) {
         if (drawerLayout == null || navView == null) return
+        DrawerFocusStyler.bind(navView)
         navView.setNavigationItemSelectedListener { item ->
             drawerLayout.closeDrawer(GravityCompat.END)
             onMenuClick(item.itemId)
@@ -69,6 +70,33 @@ open class BaseActivity : AppCompatActivity() {
 
     protected fun closeRightDrawer(drawerLayout: DrawerLayout?) {
         drawerLayout?.closeDrawer(GravityCompat.END)
+    }
+
+    fun confirmExitApp() {
+        if (isFinishing) return
+        AlertDialog.Builder(this)
+            .setTitle("Exit Network24?")
+            .setMessage("Your login and session will be kept.")
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Exit") { _, _ ->
+                // Close every Activity in the app task, then remove that task.
+                finishAffinity()
+                finishAndRemoveTask()
+            }
+            .show()
+    }
+
+    /** Uses only public View APIs so drawer focus stays stable across Material versions. */
+    protected fun focusFirstFocusableDescendant(view: android.view.View): Boolean {
+        if (view is android.view.ViewGroup) {
+            for (index in 0 until view.childCount) {
+                if (focusFirstFocusableDescendant(view.getChildAt(index))) return true
+            }
+        }
+        return view.visibility == android.view.View.VISIBLE &&
+            view.isEnabled &&
+            view.isFocusable &&
+            view.requestFocus()
     }
 
     protected fun registerDrawerBackHandler(drawerLayout: DrawerLayout) {

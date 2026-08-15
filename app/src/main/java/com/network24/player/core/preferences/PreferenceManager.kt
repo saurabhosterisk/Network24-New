@@ -31,6 +31,7 @@ class PreferenceManager(context: Context) {
         private const val KEY_DISABLED_CATEGORIES = "disabled_live_category_ids"
         private const val KEY_DISABLED_CATEGORIES_CACHED = "disabled_live_category_ids_cached"
         private const val KEY_AUTO_RECONNECT_MODE = "auto_reconnect_mode"
+        private const val KEY_SUBTITLES_ENABLED = "subtitles_enabled"
 
         // Chat
         private const val KEY_CHAT_LAST_ROOM_ID = "chat_last_room_id"
@@ -166,6 +167,12 @@ class PreferenceManager(context: Context) {
         return AutoReconnectMode.entries.firstOrNull { it.name == storedMode }
             ?: AutoReconnectMode.STANDARD
     }
+
+    fun setSubtitlesEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_SUBTITLES_ENABLED, enabled).apply()
+    }
+
+    fun areSubtitlesEnabled(): Boolean = prefs.getBoolean(KEY_SUBTITLES_ENABLED, false)
 
     // -------------------------
     // Chat preferences

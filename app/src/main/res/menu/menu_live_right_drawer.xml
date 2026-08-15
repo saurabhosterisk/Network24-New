@@ -36,9 +36,16 @@
         android:title="Settings"
         android:icon="@drawable/ic_settings" />
 
+    <!-- Kept for resource compatibility; logout is now available in Settings. -->
     <item
         android:id="@+id/action_logout"
         android:title="Logout"
-        android:icon="@drawable/ic_logout" />
+        android:icon="@drawable/ic_logout"
+        android:visible="false" />
+
+    <item
+        android:id="@+id/action_exit_app"
+        android:title="Exit App"
+        android:icon="@android:drawable/ic_lock_power_off" />
 
 </menu>

@@ -18,6 +18,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.Tracks
 import androidx.media3.ui.AspectRatioFrameLayout
 
 import com.network24.player.R
@@ -40,6 +41,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import androidx.media3.common.TrackSelectionOverride
 
+@Suppress("UnsafeOptInUsageError")
 class PlayerActivity : BaseActivity() {
 
     companion object {
@@ -113,6 +115,10 @@ class PlayerActivity : BaseActivity() {
     private val playerListener =
         object : Player.Listener {
 
+            override fun onTracksChanged(tracks: Tracks) {
+                applySubtitlePreference()
+            }
+
 
             override fun onPlaybackStateChanged(
                 playbackState: Int
@@ -158,6 +164,8 @@ class PlayerActivity : BaseActivity() {
 
                     binding.btnReportChannel.visibility =
                         View.GONE
+
+                    applySubtitlePreference()
                 }
             }
 
@@ -245,6 +253,8 @@ class PlayerActivity : BaseActivity() {
 
         prefs =
             PreferenceManager(this)
+
+        isSubtitleEnabled = prefs.areSubtitlesEnabled()
 
 
         repository =
@@ -557,6 +567,8 @@ class PlayerActivity : BaseActivity() {
             isSubtitleEnabled =
                 !isSubtitleEnabled
 
+            prefs.setSubtitlesEnabled(isSubtitleEnabled)
+
 
 
             toggleSubtitles(
@@ -838,9 +850,7 @@ class PlayerActivity : BaseActivity() {
 
 
 
-        toggleSubtitles(
-            isSubtitleEnabled
-        )
+        applySubtitlePreference()
 
 
 
@@ -1145,9 +1155,11 @@ class PlayerActivity : BaseActivity() {
 
 
 
-        toggleSubtitles(
-            isSubtitleEnabled
-        )
+        applySubtitlePreference()
+    }
+
+    private fun applySubtitlePreference() {
+        toggleSubtitles(isSubtitleEnabled)
     }
 
 

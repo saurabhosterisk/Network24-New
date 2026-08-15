@@ -9,8 +9,8 @@ import androidx.activity.OnBackPressedCallback
 import androidx.core.view.GravityCompat
 import androidx.drawerlayout.widget.DrawerLayout
 import androidx.lifecycle.lifecycleScope
-import com.google.android.material.internal.NavigationMenuView
 import com.network24.player.R
+import com.network24.player.core.base.DrawerFocusStyler
 import com.network24.player.core.preferences.PreferenceManager
 import com.network24.player.core.sync.SyncManager
 import com.network24.player.features.dashboard.activity.DashboardActivity
@@ -40,6 +40,7 @@ class EpgDrawerMenuBinder @JvmOverloads constructor(
 
         bound = true
         more.setOnClickListener { drawer.openDrawer(GravityCompat.END) }
+        DrawerFocusStyler.bind(nav)
 
         nav.setNavigationItemSelectedListener { item ->
             drawer.closeDrawer(GravityCompat.END)
@@ -73,10 +74,8 @@ class EpgDrawerMenuBinder @JvmOverloads constructor(
                     activity.startActivity(Intent(activity, SettingsActivity::class.java))
                     true
                 }
-                R.id.action_logout -> {
-                    PreferenceManager(activity).clear()
-                    activity.startActivity(Intent(activity, LoginActivity::class.java))
-                    activity.finishAffinity()
+                R.id.action_exit_app -> {
+                    activity.confirmExitApp()
                     true
                 }
                 else -> false
@@ -86,16 +85,7 @@ class EpgDrawerMenuBinder @JvmOverloads constructor(
         drawer.addDrawerListener(object : DrawerLayout.SimpleDrawerListener() {
             override fun onDrawerOpened(drawerView: View) {
                 if (drawerView.id != R.id.rightNav) return
-                nav.post {
-                    val menuView = nav.getChildAt(0) as? NavigationMenuView
-                    for (i in 0 until (menuView?.childCount ?: 0)) {
-                        val child = menuView?.getChildAt(i) ?: continue
-                        if (child.isFocusable) {
-                            child.requestFocus()
-                            break
-                        }
-                    }
-                }
+                nav.post { nav.focusFirstFocusableDescendant() }
             }
         })
 
@@ -160,4 +150,13 @@ class EpgDrawerMenuBinder @JvmOverloads constructor(
             activity.javaClass.superclass?.getDeclaredMethod("hideLoader")?.apply { isAccessible = true }?.invoke(activity)
         } catch (_: Exception) { }
     }
+}
+
+private fun View.focusFirstFocusableDescendant(): Boolean {
+    if (this is android.view.ViewGroup) {
+        for (index in 0 until childCount) {
+            if (getChildAt(index).focusFirstFocusableDescendant()) return true
+        }
+    }
+    return visibility == View.VISIBLE && isEnabled && isFocusable && requestFocus()
 }

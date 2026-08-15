@@ -947,6 +947,7 @@ class ChannelListActivity : BaseActivity() {
 
 
 
+                R.id.action_exit_app -> { confirmExitApp(); true }
                 else -> false
             }
         }

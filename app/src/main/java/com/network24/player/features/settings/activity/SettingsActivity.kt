@@ -205,6 +205,7 @@ class SettingsActivity : BaseActivity() {
             .setMessage("Your login and session will be kept.")
             .setNegativeButton("Cancel", null)
             .setPositiveButton("Exit") { _, _ ->
+                finishAffinity()
                 finishAndRemoveTask()
             }
             .show()
